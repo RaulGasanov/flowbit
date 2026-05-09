@@ -26,6 +26,16 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: "appearance", label: "Appearance settings" },
 ];
 
+const accentOptions: Array<{
+  value: User["settings"]["accentColor"];
+  label: string;
+  swatchClassName: string;
+}> = [
+  { value: "sky", label: "Sky", swatchClassName: "bg-sky-500" },
+  { value: "emerald", label: "Emerald", swatchClassName: "bg-emerald-500" },
+  { value: "rose", label: "Rose", swatchClassName: "bg-rose-500" },
+];
+
 interface SettingsFormProps {
   user: User;
 }
@@ -171,6 +181,28 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
     }
   };
 
+  const saveTheme = async (theme: User["settings"]["theme"]) => {
+    setError(undefined);
+    setSuccess(undefined);
+    try {
+      await toggleTheme(theme);
+      setSuccess("Saved successfully");
+    } catch (themeError) {
+      setError(themeError instanceof Error ? themeError.message : "Unable to update theme");
+    }
+  };
+
+  const saveAccentColor = async (accentColor: User["settings"]["accentColor"]) => {
+    setError(undefined);
+    setSuccess(undefined);
+    try {
+      await updateSettings({ ...user.settings, accentColor });
+      setSuccess("Saved successfully");
+    } catch (appearanceError) {
+      setError(appearanceError instanceof Error ? appearanceError.message : "Unable to update appearance");
+    }
+  };
+
   return (
     <>
       <Toast open={Boolean(toast)} tone={toast?.tone ?? "success"} message={toast?.message ?? ""} onClose={closeToast} />
@@ -310,65 +342,65 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
           </section>
         ) : null}
 
-        {activeTab === "appearance" ? (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Appearance settings</h2>
-            <div className="grid gap-2 md:grid-cols-2">
-              <Button
-                variant={user.settings.theme === "light" ? "primary" : "secondary"}
-                onClick={async () => {
-                  setError(undefined);
-                  setSuccess(undefined);
-                  try {
-                    await toggleTheme("light");
-                    setSuccess("Saved successfully");
-                  } catch (themeError) {
-                    setError(themeError instanceof Error ? themeError.message : "Unable to update theme");
-                  }
-                }}
-              >
-                Light mode
-              </Button>
-              <Button
-                variant={user.settings.theme === "dark" ? "primary" : "secondary"}
-                onClick={async () => {
-                  setError(undefined);
-                  setSuccess(undefined);
-                  try {
-                    await toggleTheme("dark");
-                    setSuccess("Saved successfully");
-                  } catch (themeError) {
-                    setError(themeError instanceof Error ? themeError.message : "Unable to update theme");
-                  }
-                }}
-              >
-                Dark mode
-              </Button>
-            </div>
-            <label className="text-sm text-foreground/70">Theme color</label>
-            <select
-              value={user.settings.accentColor}
-              onChange={async (event) => {
-                setError(undefined);
-                setSuccess(undefined);
-                try {
-                  await updateSettings({
-                    ...user.settings,
-                    accentColor: event.target.value as User["settings"]["accentColor"],
-                  });
-                  setSuccess("Saved successfully");
-                } catch (appearanceError) {
-                  setError(appearanceError instanceof Error ? appearanceError.message : "Unable to update appearance");
-                }
-              }}
-              className="rounded-md border border-border bg-surface-muted px-2 py-2 text-sm"
-            >
-              <option value="sky">Sky</option>
-              <option value="emerald">Emerald</option>
-              <option value="rose">Rose</option>
-            </select>
-          </section>
-        ) : null}
+          {activeTab === "appearance" ? (
+            <section className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold">Appearance settings</h2>
+                <p className="mt-1 text-sm text-muted">Theme and accent preferences for your workspace.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Theme</p>
+                <div className="grid gap-2 rounded-2xl border border-border bg-surface-muted p-1.5 sm:grid-cols-2">
+                  {(["light", "dark"] as const).map((theme) => {
+                    const active = user.settings.theme === theme;
+                    return (
+                      <button
+                        key={theme}
+                        type="button"
+                        className={`min-h-12 rounded-xl px-4 text-sm font-semibold transition ${
+                          active
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-muted hover:bg-panel hover:text-foreground"
+                        }`}
+                        onClick={() => {
+                          void saveTheme(theme);
+                        }}
+                      >
+                        {theme === "light" ? "Light mode" : "Dark mode"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Accent color</p>
+                <div className="flex flex-wrap gap-2">
+                  {accentOptions.map((option) => {
+                    const active = user.settings.accentColor === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition ${
+                          active
+                            ? "border-accent bg-accent/10 text-foreground ring-2 ring-accent/15"
+                            : "border-border bg-surface-muted text-muted hover:bg-panel hover:text-foreground"
+                        }`}
+                        onClick={() => {
+                          void saveAccentColor(option.value);
+                        }}
+                      >
+                        <span className={`h-3 w-3 rounded-full ${option.swatchClassName}`} />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          ) : null}
         </Card>
       </div>
 
