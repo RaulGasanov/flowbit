@@ -30,7 +30,7 @@ const emptyTaskFilter: TaskFilter = { column: "none", value: "" };
 const priorityTone: Record<TaskPriority, string> = {
   low: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900",
   medium: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-900",
-  high: "bg-pink-50 text-pink-700 ring-pink-100 dark:bg-pink-950/50 dark:text-pink-200 dark:ring-pink-900",
+  high: "bg-rose-50 text-rose-700 ring-rose-100 dark:bg-rose-950/50 dark:text-rose-200 dark:ring-rose-900",
 };
 
 const progressTone: Record<TaskStatus, string> = {
@@ -337,7 +337,7 @@ const TaskTable = ({
       <thead>
         <tr className="border-b border-border text-[13px] font-medium text-muted">
           <th className="w-10 px-4 py-3">
-            <span className="block h-4 w-4 rounded-full border border-border" />
+            <span className="block h-4 w-4 rounded-full border border-border bg-panel" />
           </th>
           <th className="w-20 px-2 py-3">#</th>
           <th className="w-24 px-2 py-3">Task ID</th>
@@ -361,14 +361,18 @@ const TaskTable = ({
               <td className="px-4 py-3">
                 <button
                   type="button"
-                  className={task.status === "done" ? "grid h-4 w-4 place-items-center rounded-full bg-accent text-[10px] text-white" : "block h-4 w-4 rounded-full border border-border hover:border-accent"}
+                  className={
+                    task.status === "done"
+                      ? "grid h-4 w-4 place-items-center rounded-full border border-accent/40 bg-accent/10 transition hover:bg-accent/15"
+                      : "grid h-4 w-4 place-items-center rounded-full border border-border bg-panel transition hover:border-accent/60 hover:bg-accent/5"
+                  }
                   aria-label={task.status === "done" ? `Mark ${task.title} as todo` : `Mark ${task.title} as done`}
                   onClick={(event) => {
                     event.stopPropagation();
                     onToggleTaskDone(task);
                   }}
                 >
-                  {task.status === "done" ? "✓" : ""}
+                  {task.status === "done" ? <span className="h-1.5 w-1.5 rounded-full bg-accent" /> : null}
                 </button>
               </td>
               <td className="px-2 py-3 text-muted">{index + 1}</td>
@@ -393,7 +397,6 @@ const TaskTable = ({
               </td>
               <td className="px-3 py-3">
                 <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ring-1 ${progressTone[task.status]}`}>
-                  {task.status === "done" ? "✓ " : task.status === "in_progress" ? "◌ " : "◷ "}
                   {progressLabel[task.status]}
                 </span>
               </td>
@@ -677,8 +680,8 @@ export default function DashboardPage() {
                 selectTask(undefined);
               }}
             />
-            <Link href={`/tasks/${selectedTask.id}`}>
-              <Button variant="secondary" className="w-full">
+            <Link href={`/tasks/${selectedTask.id}`} className="mt-4 block">
+              <Button variant="secondary" className="w-full rounded-xl">
                 Open full task page
               </Button>
             </Link>

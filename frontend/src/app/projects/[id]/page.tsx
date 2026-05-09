@@ -153,8 +153,8 @@ export default function ProjectBoardPage() {
                 selectTask(undefined);
               }}
             />
-            <Link href={`/tasks/${selectedTask.id}`}>
-              <Button variant="secondary" className="w-full">
+            <Link href={`/tasks/${selectedTask.id}`} className="mt-4 block">
+              <Button variant="secondary" className="w-full rounded-xl">
                 Open full task page
               </Button>
             </Link>
