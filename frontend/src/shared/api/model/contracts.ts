@@ -116,7 +116,6 @@ export interface ApiClient {
   listNotifications(userId: ID): Promise<Notification[]>;
   markNotificationRead(notificationId: ID): Promise<void>;
   markAllNotificationsRead(userId: ID): Promise<void>;
-  generateNotification(userId: ID): Promise<Notification>;
   updateUserProfile(userId: ID, input: UpdateUserProfileInput): Promise<User>;
   updateUserSettings(userId: ID, input: UpdateUserSettingsInput): Promise<User>;
   uploadAvatar(userId: ID, input: UploadAvatarInput): Promise<{ avatarUrl: string }>;

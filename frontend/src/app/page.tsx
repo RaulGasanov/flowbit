@@ -6,6 +6,8 @@ import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Avatar } from "@/shared/ui/avatar";
+import { Toast } from "@/shared/ui/toast";
+import { Select } from "@/shared/ui/select";
 import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
 import { useProjectsStore } from "@/entities/project/model/store";
 import { BoardSkeleton } from "@/widgets/board/ui/board-skeleton";
@@ -18,12 +20,14 @@ import { TaskDetails } from "@/entities/task/ui/task-details";
 import { useTasksStore } from "@/entities/task/model/store";
 import type { Task, TaskPriority, TaskStatus, User } from "@/shared/types/domain";
 
-type TaskFilterColumn = "none" | "taskId" | "taskName" | "category" | "assigned" | "due" | "priority" | "progress";
+type TaskFilterColumn = "none" | "taskId" | "taskName" | "assigned" | "due" | "priority" | "progress";
 
 interface TaskFilter {
   column: TaskFilterColumn;
   value: string;
 }
+
+type StatusToast = { message: string; tone: "success" | "error" };
 
 const emptyTaskFilter: TaskFilter = { column: "none", value: "" };
 
@@ -45,17 +49,10 @@ const progressLabel: Record<TaskStatus, string> = {
   done: "Finish",
 };
 
-const categoryByPriority: Record<TaskPriority, string> = {
-  low: "Planning",
-  medium: "Design",
-  high: "Delivery",
-};
-
 const taskFilterColumns: Array<{ value: TaskFilterColumn; label: string }> = [
   { value: "none", label: "No filter" },
   { value: "taskId", label: "Task ID" },
   { value: "taskName", label: "Task Name" },
-  { value: "category", label: "Category" },
   { value: "assigned", label: "Assigned" },
   { value: "due", label: "Due" },
   { value: "priority", label: "Priority" },
@@ -120,9 +117,6 @@ const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
   if (filter.column === "taskName") {
     return task.title.toLowerCase().includes(value);
   }
-  if (filter.column === "category") {
-    return categoryByPriority[task.priority].toLowerCase() === value;
-  }
   if (filter.column === "assigned") {
     return value === "unassigned" ? !task.assigneeId : task.assigneeId === filter.value;
   }
@@ -139,9 +133,6 @@ const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
 };
 
 const filterValueOptions = (column: TaskFilterColumn, users: User[]) => {
-  if (column === "category") {
-    return Object.values(categoryByPriority).map((category) => ({ value: category.toLowerCase(), label: category }));
-  }
   if (column === "assigned") {
     return [
       { value: "unassigned", label: "Unassigned" },
@@ -184,11 +175,16 @@ const SectionShell = ({
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <button
         type="button"
-        className="grid h-8 w-8 place-items-center rounded-md text-lg text-muted hover:bg-panel hover:text-foreground"
+        className="grid h-8 w-8 place-items-center rounded-md text-muted hover:bg-panel hover:text-foreground"
         aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
         onClick={onToggle}
       >
-        {collapsed ? "›" : "⌄"}
+        <span
+          aria-hidden="true"
+          className={`h-2 w-2 border-b-2 border-r-2 border-current transition-transform ${
+            collapsed ? "-rotate-45" : "rotate-45"
+          }`}
+        />
       </button>
     </header>
     {collapsed ? null : children}
@@ -224,20 +220,28 @@ const SectionTabs = ({
           {item}
         </button>
       ))}
-      <button type="button" className="py-4 text-lg leading-none text-muted hover:text-foreground" aria-label="Add view" onClick={() => onNew?.()}>
-        +
-      </button>
+      {onNew ? (
+        <button type="button" className="py-4 text-lg leading-none text-muted hover:text-foreground" aria-label="Add view" onClick={onNew}>
+          +
+        </button>
+      ) : null}
     </nav>
-    <div className="flex items-center gap-4 text-[13px] font-medium text-muted">
-      <button
-        type="button"
-        className={filterActive ? "text-accent" : "hover:text-foreground"}
-        onClick={onFilter}
-      >
-        Filter
-      </button>
-      <button type="button" className="hover:text-foreground" onClick={onSort}>Sort</button>
-    </div>
+    {onFilter || onSort ? (
+      <div className="flex items-center gap-4 text-[13px] font-medium text-muted">
+        {onFilter ? (
+          <button
+            type="button"
+            className={filterActive ? "text-accent" : "hover:text-foreground"}
+            onClick={onFilter}
+          >
+            Filter
+          </button>
+        ) : null}
+        {onSort ? (
+          <button type="button" className="hover:text-foreground" onClick={onSort}>Sort</button>
+        ) : null}
+      </div>
+    ) : null}
   </div>
 );
 
@@ -260,7 +264,7 @@ const TaskFilterPanel = ({
     <div className="grid gap-3 border-b border-border bg-panel-muted px-4 py-3 md:grid-cols-[220px_1fr_auto]">
       <label className="grid gap-1 text-xs font-medium text-muted">
         Column
-        <select
+        <Select
           value={filter.column}
           onChange={(event) => {
             const column = event.target.value as TaskFilterColumn;
@@ -270,14 +274,13 @@ const TaskFilterPanel = ({
               value: column === "none" ? "" : nextOptions[0]?.value ?? "",
             });
           }}
-          className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
         >
           {taskFilterColumns.map((column) => (
             <option key={column.value} value={column.value}>
               {column.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       {needsValue ? (
@@ -291,17 +294,16 @@ const TaskFilterPanel = ({
               className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none placeholder:text-soft focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
             />
           ) : (
-            <select
+            <Select
               value={filter.value}
               onChange={(event) => onChange({ ...filter, value: event.target.value })}
-              className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
             >
               {options.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </label>
       ) : (
@@ -320,20 +322,18 @@ const TaskFilterPanel = ({
 const TaskTable = ({
   tasks,
   users,
-  projectName,
   onOpenTask,
   onNew,
   onToggleTaskDone,
 }: {
   tasks: Task[];
   users: User[];
-  projectName: string;
   onOpenTask: (taskId: string) => void;
   onNew: () => void;
   onToggleTaskDone: (task: Task) => void;
 }) => (
   <div className="overflow-x-auto">
-    <table className="min-w-[920px] w-full border-collapse text-left text-sm">
+    <table className="min-w-[840px] w-full border-collapse text-left text-sm">
       <thead>
         <tr className="border-b border-border text-[13px] font-medium text-muted">
           <th className="w-10 px-4 py-3">
@@ -342,7 +342,6 @@ const TaskTable = ({
           <th className="w-20 px-2 py-3">#</th>
           <th className="w-24 px-2 py-3">Task ID</th>
           <th className="px-3 py-3">Task Name</th>
-          <th className="w-40 px-3 py-3">Category</th>
           <th className="w-48 px-3 py-3">Assigned</th>
           <th className="w-40 px-3 py-3">Due</th>
           <th className="w-36 px-3 py-3">Priority</th>
@@ -382,7 +381,6 @@ const TaskTable = ({
                   {task.title}
                 </p>
               </td>
-              <td className="px-3 py-3 text-muted">{categoryByPriority[task.priority] ?? projectName}</td>
               <td className="px-3 py-3">
                 <div className="flex items-center gap-2">
                   <Avatar name={assignee?.name ?? "Unassigned"} src={assignee?.avatarUrl} className="h-7 w-7" />
@@ -442,12 +440,10 @@ export default function DashboardPage() {
   const [taskSectionOpen, setTaskSectionOpen] = useState(true);
   const [projectSectionOpen, setProjectSectionOpen] = useState(true);
   const [taskTab, setTaskTab] = useState("All Tasks");
-  const [projectTab, setProjectTab] = useState("Kanban");
   const [taskFilterOpen, setTaskFilterOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState<TaskFilter>(emptyTaskFilter);
   const [sortNewestFirst, setSortNewestFirst] = useState(false);
-  const [favorite, setFavorite] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string>();
+  const [statusToast, setStatusToast] = useState<StatusToast>();
 
   useEffect(() => {
     loadUsers();
@@ -477,9 +473,9 @@ export default function DashboardPage() {
     setCreateModalOpen(true);
   };
   const openCreateWorkspace = () => window.dispatchEvent(new Event("flowbit:new-workspace"));
-  const showMessage = (message: string) => {
-    setStatusMessage(message);
-    window.setTimeout(() => setStatusMessage(undefined), 2200);
+  const showMessage = (message: string, tone: StatusToast["tone"] = "success") => {
+    setStatusToast({ message, tone });
+    window.setTimeout(() => setStatusToast(undefined), 3200);
   };
 
   useEffect(() => {
@@ -489,13 +485,19 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedTaskId) {
       void loadComments(selectedTaskId).catch((commentsError) => {
-        showMessage(commentsError instanceof Error ? commentsError.message : "Unable to load comments");
+        showMessage(commentsError instanceof Error ? commentsError.message : "Unable to load comments", "error");
       });
     }
   }, [selectedTaskId, loadComments]);
 
   return (
     <AppShell>
+      <Toast
+        open={Boolean(statusToast)}
+        tone={statusToast?.tone ?? "success"}
+        message={statusToast?.message ?? ""}
+        onClose={() => setStatusToast(undefined)}
+      />
       <section className="space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -526,39 +528,10 @@ export default function DashboardPage() {
                 showMessage("Project link copied");
               }}
             >
-              ⤴ Share
+              Share
             </Button>
-            <button
-              type="button"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted hover:bg-panel-muted hover:text-foreground"
-              aria-label="Comments"
-              onClick={() => {
-                const firstTask = visibleTasks[0];
-                if (firstTask) {
-                  selectTask(firstTask.id);
-                } else {
-                  showMessage("No tasks to open");
-                }
-              }}
-            >
-              💬
-            </button>
-            <button
-              type="button"
-              className={`grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-panel-muted ${favorite ? "text-amber-500" : "text-muted"}`}
-              aria-label="Favorite"
-              onClick={() => setFavorite((value) => !value)}
-            >
-              {favorite ? "★" : "☆"}
-            </button>
           </div>
         </header>
-
-        {statusMessage ? (
-          <p className="rounded-lg border border-accent/20 bg-accent/10 px-3 py-2 text-sm text-accent">
-            {statusMessage}
-          </p>
-        ) : null}
 
         <div className="overflow-hidden rounded-xl border border-border bg-panel shadow-[0_12px_36px_rgb(15_23_42/0.04)] dark:shadow-none">
           <SectionShell title="Task" collapsed={!taskSectionOpen} onToggle={() => setTaskSectionOpen((open) => !open)}>
@@ -586,12 +559,11 @@ export default function DashboardPage() {
               <TaskTable
                 tasks={visibleTasks}
                 users={users}
-                projectName="Workspace"
                 onOpenTask={selectTask}
                 onNew={openCreateTask}
                 onToggleTaskDone={(task) => {
                   void updateTaskStatus(task.id, task.status === "done" ? "todo" : "done").catch((toggleError) => {
-                    showMessage(toggleError instanceof Error ? toggleError.message : "Unable to update task");
+                    showMessage(toggleError instanceof Error ? toggleError.message : "Unable to update task", "error");
                   });
                 }}
               />
@@ -600,17 +572,15 @@ export default function DashboardPage() {
 
           <SectionShell title="Projects" collapsed={!projectSectionOpen} onToggle={() => setProjectSectionOpen((open) => !open)}>
             <SectionTabs
-              active={projectTab}
-              items={["Kanban", "Timeline", "Teams", "Budgeting"]}
-              onChange={setProjectTab}
+              active="Kanban"
+              items={["Kanban"]}
+              onChange={() => undefined}
               onNew={openCreateWorkspace}
-              onFilter={() => showMessage("Use Task filters to filter table columns")}
-              onSort={() => setSortNewestFirst((value) => !value)}
             />
             <div className="p-4">
               {isLoading ? (
                 <BoardSkeleton />
-              ) : projectTab === "Kanban" ? (
+              ) : (
                 <KanbanBoard
                   tasks={tasks}
                   users={users}
@@ -619,27 +589,6 @@ export default function DashboardPage() {
                   onMoveTask={moveTask}
                   onAddTask={openCreateTask}
                 />
-              ) : projectTab === "Teams" ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {projectMembers.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3 text-left hover:bg-panel-muted"
-                      onClick={() => showMessage(`${user.name} selected`)}
-                    >
-                      <Avatar name={user.name} src={user.avatarUrl} />
-                      <span>
-                        <span className="block text-sm font-medium text-foreground">{user.name}</span>
-                        <span className="block text-xs text-muted">{user.role}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-border bg-panel-muted p-6 text-sm text-muted">
-                  {projectTab} view is ready for workspace data. Use New to create a workspace.
-                </div>
               )}
             </div>
           </SectionShell>

@@ -21,7 +21,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
   const { projects, loadProjects, createProject } = useProjectsStore();
   const { loadUsers, currentUserId } = useUserStore();
   const currentUser = useCurrentUser();
-  const { loadNotifications, startRealtime, stopRealtime } = useNotificationsStore();
+  const { loadNotifications } = useNotificationsStore();
   const { setQuery } = useTasksStore();
 
   useEffect(() => {
@@ -41,9 +41,7 @@ export const AppShell = ({ children }: PropsWithChildren) => {
       return;
     }
     loadNotifications(currentUserId);
-    startRealtime(currentUserId);
-    return () => stopRealtime();
-  }, [currentUserId, loadNotifications, startRealtime, stopRealtime]);
+  }, [currentUserId, loadNotifications]);
 
   useEffect(() => {
     const html = document.documentElement;

@@ -20,10 +20,10 @@ const taskIconMap = {
   high: "◎",
 } as const;
 
-const progressText = {
-  todo: "1/5",
-  in_progress: "2/3",
-  done: "4/6",
+const statusText = {
+  todo: "Pending",
+  in_progress: "In Progress",
+  done: "Finish",
 } as const;
 
 export const TaskCard = ({ task, assignee, onOpen }: TaskCardProps) => (
@@ -62,10 +62,9 @@ export const TaskCard = ({ task, assignee, onOpen }: TaskCardProps) => (
             <span className="h-6 w-6 rounded-full bg-panel-muted" />
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted">
-          <span>♡ {task.priority === "high" ? 12 : 4}</span>
-          <span>✓ {progressText[task.status]}</span>
-        </div>
+        <span className="rounded-md bg-panel-muted px-2 py-1 text-xs font-medium text-muted">
+          {statusText[task.status]}
+        </span>
       </div>
     </div>
   </button>

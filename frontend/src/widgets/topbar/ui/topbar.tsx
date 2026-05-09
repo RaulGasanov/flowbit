@@ -25,14 +25,14 @@ interface OpenTab {
   href: string;
 }
 
-const TABS_STORAGE_KEY = "flowbit:open-tabs";
+const TABS_STORAGE_PREFIX = "flowbit:open-tabs";
 
-const readStoredTabs = (): OpenTab[] => {
+const readStoredTabs = (storageKey: string): OpenTab[] => {
   if (typeof window === "undefined") {
     return [];
   }
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(TABS_STORAGE_KEY) ?? "[]");
+    const parsed = JSON.parse(window.sessionStorage.getItem(storageKey) ?? "[]");
     return Array.isArray(parsed)
        ? parsed.filter((tab): tab is OpenTab =>
           typeof tab?.id === "string" &&
@@ -45,9 +45,9 @@ const readStoredTabs = (): OpenTab[] => {
   }
 };
 
-const writeStoredTabs = (tabs: OpenTab[]) => {
+const writeStoredTabs = (storageKey: string, tabs: OpenTab[]) => {
   if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(tabs));
+    window.sessionStorage.setItem(storageKey, JSON.stringify(tabs));
   }
 };
 
@@ -63,7 +63,9 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const projects = useProjectsStore((state) => state.projects);
+  const projectsLoading = useProjectsStore((state) => state.isLoading);
   const currentUser = useCurrentUser();
+  const storageKey = `${TABS_STORAGE_PREFIX}:${currentUser?.id ?? "guest"}`;
   const logout = useAuthStore((state) => state.logout);
   const toggleTheme = useToggleTheme();
   const {
@@ -84,19 +86,31 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
     const projectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
     if (projectId) {
       const project = projects.find((item) => item.id === projectId);
-      return {
-        id: `project:${projectId}`,
-        label: project?.name ?? "Project",
-        href: `/projects/${projectId}`,
-      };
+      return project
+        ? {
+            id: `project:${projectId}`,
+            label: project.name,
+            href: `/projects/${projectId}`,
+          }
+        : null;
     }
     return null;
   }, [pathname, projects]);
 
   const [openTabs, setOpenTabs] = useState<OpenTab[]>(() => {
-    const storedTabs = readStoredTabs();
+    const storedTabs = readStoredTabs(storageKey);
     return currentTab ? mergeTab(storedTabs, currentTab) : storedTabs;
   });
+
+  useEffect(() => {
+    const storedTabs = readStoredTabs(storageKey);
+    const nextTabs = currentTab ? mergeTab(storedTabs, currentTab) : storedTabs;
+    const timeout = window.setTimeout(() => {
+      setOpenTabs(nextTabs);
+      writeStoredTabs(storageKey, nextTabs);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [storageKey, currentTab]);
 
   useEffect(() => {
     const onOpenTab = (event: Event) => {
@@ -106,22 +120,36 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
       }
       setOpenTabs((tabs) => {
         const nextTabs = mergeTab(tabs, tab);
-        writeStoredTabs(nextTabs);
+        writeStoredTabs(storageKey, nextTabs);
         return nextTabs;
       });
     };
     window.addEventListener("flowbit:open-tab", onOpenTab);
     return () => window.removeEventListener("flowbit:open-tab", onOpenTab);
-  }, []);
+  }, [storageKey]);
 
-  const displayedTabs = openTabs.map((tab) => {
+  const displayedTabs = useMemo(() => openTabs.flatMap((tab) => {
     const projectId = tab.id.startsWith("project:") ? tab.id.replace("project:", "") : undefined;
     if (!projectId) {
-      return tab;
+      return [tab];
     }
     const project = projects.find((item) => item.id === projectId);
-    return project ? { ...tab, label: project.name } : tab;
-  });
+    if (project) {
+      return [{ ...tab, label: project.name }];
+    }
+    return projectsLoading ? [tab] : [];
+  }), [openTabs, projects, projectsLoading]);
+
+  useEffect(() => {
+    if (projectsLoading || displayedTabs.length === openTabs.length) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setOpenTabs(displayedTabs);
+      writeStoredTabs(storageKey, displayedTabs);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [displayedTabs, openTabs.length, projectsLoading, storageKey]);
 
   const closeTab = (tab: OpenTab) => {
     if (displayedTabs.length <= 1) {
@@ -130,7 +158,7 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
     const closedIndex = displayedTabs.findIndex((item) => item.id === tab.id);
     const nextTabs = displayedTabs.filter((item) => item.id !== tab.id);
     setOpenTabs(nextTabs);
-    writeStoredTabs(nextTabs);
+    writeStoredTabs(storageKey, nextTabs);
     if (currentTab?.id === tab.id) {
       const fallback = nextTabs[Math.max(0, closedIndex - 1)] ?? nextTabs[0];
       router.push(fallback.href);

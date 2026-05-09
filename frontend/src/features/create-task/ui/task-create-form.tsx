@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { Select } from "@/shared/ui/select";
 import type { TaskPriority, TaskStatus, User } from "@/shared/types/domain";
 
 interface TaskCreateFormProps {
@@ -101,40 +102,40 @@ export const TaskCreateForm = ({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium text-muted">
           Status
-          <select
+          <Select
             value={status}
             onChange={(event) => setStatus(event.target.value as TaskStatus)}
-            className="rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-sm text-foreground outline-none ring-accent/40 transition focus:border-accent/50 focus:ring-2"
+            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
             <option value="done">Done</option>
-          </select>
+          </Select>
         </label>
 
         <label className="grid gap-1 text-sm font-medium text-muted">
           Priority
-          <select
+          <Select
             value={priority}
             onChange={(event) => setPriority(event.target.value as TaskPriority)}
-            className="rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-sm text-foreground outline-none ring-accent/40 transition focus:border-accent/50 focus:ring-2"
+            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
-          </select>
+          </Select>
         </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium text-muted">
           Assignee
-          <select
+          <Select
             value={assigneeId}
             onChange={(event) => setAssigneeId(event.target.value)}
-            className="rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-sm text-foreground outline-none ring-accent/40 transition focus:border-accent/50 focus:ring-2"
+            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="">Unassigned</option>
@@ -143,7 +144,7 @@ export const TaskCreateForm = ({
                 {user.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="grid gap-1 text-sm font-medium text-muted">
@@ -161,10 +162,10 @@ export const TaskCreateForm = ({
       {!projectId ? (
         <label className="grid gap-1 text-sm font-medium text-muted">
           Workspace
-          <select
+          <Select
             value={selectedProjectId}
             onChange={(event) => setSelectedProjectId(event.target.value)}
-            className="rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-sm text-foreground outline-none ring-accent/40 transition focus:border-accent/50 focus:ring-2"
+            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="">Choose workspace</option>
@@ -173,7 +174,7 @@ export const TaskCreateForm = ({
                 {project.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       ) : null}
       <Button type="submit" variant="primary" disabled={disabled || isSubmitting} className="w-full">

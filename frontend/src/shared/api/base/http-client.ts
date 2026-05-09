@@ -130,6 +130,4 @@ export const httpApiClient: ApiClient = {
     request(`/notifications/${notificationId}/read`, { method: "PATCH" }),
   markAllNotificationsRead: (userId: ID) =>
     request(`/notifications/read-all`, { method: "PATCH", body: JSON.stringify({ userId }) }),
-  generateNotification: (userId: ID) =>
-    request("/notifications/generate", { method: "POST", body: JSON.stringify({ userId }) }),
 };

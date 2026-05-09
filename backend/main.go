@@ -190,15 +190,6 @@ func newStore(databaseURL string) (*appStore, error) {
 	if err := store.load(); err != nil {
 		return nil, err
 	}
-	if len(store.data.Users) == 0 {
-		store.data = seedData()
-		return store, store.save()
-	}
-	for i := range store.data.Users {
-		if store.data.Users[i].PasswordHash == "" {
-			store.data.Users[i].PasswordHash = hashPassword("password123")
-		}
-	}
 	return store, nil
 }
 
@@ -336,7 +327,6 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/tasks/", a.requireAuth(a.taskByID))
 	mux.HandleFunc("/api/tasks", a.requireAuth(a.tasks))
 	mux.HandleFunc("/api/notifications/read-all", a.requireAuth(a.markAllNotificationsRead))
-	mux.HandleFunc("/api/notifications/generate", a.requireAuth(a.generateNotification))
 	mux.HandleFunc("/api/notifications/", a.requireAuth(a.notificationByID))
 	mux.HandleFunc("/api/notifications", a.requireAuth(a.notifications))
 	return mux
@@ -424,21 +414,22 @@ func (a *app) register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	role := "editor"
+	if len(a.store.data.Users) == 0 {
+		role = "admin"
+	}
 	user := User{
 		ID:           randomID("usr"),
 		Name:         input.Name,
 		Email:        input.Email,
-		Role:         "editor",
+		Role:         role,
 		Bio:          "",
-		Workspace:    "Flowbit Core Team",
-		AvatarURL:    fmt.Sprintf("https://i.pravatar.cc/120?u=%s", input.Email),
+		Workspace:    input.Name + "'s workspace",
+		AvatarURL:    "",
 		Settings:     defaultSettings("light", "sky"),
 		PasswordHash: hashPassword(input.Password),
 	}
 	a.store.data.Users = append(a.store.data.Users, user)
-	if len(a.store.data.Projects) > 0 {
-		a.store.data.Projects[0].MemberIDs = append(a.store.data.Projects[0].MemberIDs, user.ID)
-	}
 	if err := a.store.save(); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "Unable to save account")
 		return
@@ -463,7 +454,14 @@ func (a *app) users(w http.ResponseWriter, r *http.Request, user User) {
 	}
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
-	writeJSON(w, http.StatusOK, a.store.data.Users)
+	visibleUserIDs := a.visibleUserIDsLocked(user)
+	users := make([]User, 0, len(visibleUserIDs))
+	for _, item := range a.store.data.Users {
+		if visibleUserIDs[item.ID] {
+			users = append(users, item)
+		}
+	}
+	writeJSON(w, http.StatusOK, users)
 }
 
 func (a *app) userByID(w http.ResponseWriter, r *http.Request, current User) {
@@ -595,7 +593,13 @@ func (a *app) projects(w http.ResponseWriter, r *http.Request, user User) {
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
 	if r.Method == http.MethodGet {
-		writeJSON(w, http.StatusOK, a.store.data.Projects)
+		projects := make([]Project, 0)
+		for _, project := range a.store.data.Projects {
+			if isProjectMember(project, user.ID) {
+				projects = append(projects, project)
+			}
+		}
+		writeJSON(w, http.StatusOK, projects)
 		return
 	}
 
@@ -669,6 +673,10 @@ func (a *app) projectByID(w http.ResponseWriter, r *http.Request, user User) {
 		errorJSON(w, http.StatusNotFound, "Project not found")
 		return
 	}
+	if !isProjectMember(a.store.data.Projects[index], user.ID) {
+		errorJSON(w, http.StatusNotFound, "Project not found")
+		return
+	}
 	if r.Method == http.MethodGet {
 		writeJSON(w, http.StatusOK, a.store.data.Projects[index])
 		return
@@ -698,8 +706,12 @@ func (a *app) tasks(w http.ResponseWriter, r *http.Request, user User) {
 		projectID := r.URL.Query().Get("projectId")
 		status := r.URL.Query().Get("status")
 		query := strings.ToLower(r.URL.Query().Get("q"))
+		availableProjects := a.userProjectIDsLocked(user)
 		tasks := make([]Task, 0, len(a.store.data.Tasks))
 		for _, task := range a.store.data.Tasks {
+			if !availableProjects[task.ProjectID] {
+				continue
+			}
 			if projectID != "" && task.ProjectID != projectID {
 				continue
 			}
@@ -717,6 +729,14 @@ func (a *app) tasks(w http.ResponseWriter, r *http.Request, user User) {
 	if r.Method == http.MethodPost {
 		var input Task
 		if !decodeJSON(w, r, &input) {
+			return
+		}
+		if !a.canAccessProjectLocked(input.ProjectID, user) {
+			errorJSON(w, http.StatusNotFound, "Workspace not found")
+			return
+		}
+		if input.AssigneeID != "" && !a.isProjectMemberLocked(input.ProjectID, input.AssigneeID) {
+			errorJSON(w, http.StatusBadRequest, "Assignee is not a workspace member")
 			return
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -763,6 +783,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 		errorJSON(w, http.StatusNotFound, "Task not found")
 		return
 	}
+	if !a.canAccessProjectLocked(a.store.data.Tasks[index].ProjectID, user) {
+		errorJSON(w, http.StatusNotFound, "Task not found")
+		return
+	}
 
 	switch {
 	case r.Method == http.MethodGet && len(parts) == 1:
@@ -789,6 +813,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 			task.Deadline = input.Deadline
 		}
 		if input.AssigneeID != "" {
+			if !a.isProjectMemberLocked(task.ProjectID, input.AssigneeID) {
+				errorJSON(w, http.StatusBadRequest, "Assignee is not a workspace member")
+				return
+			}
 			task.AssigneeID = input.AssigneeID
 		}
 		task.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -877,6 +905,10 @@ func (a *app) notifications(w http.ResponseWriter, r *http.Request, user User) {
 	if userID == "" {
 		userID = user.ID
 	}
+	if userID != user.ID {
+		errorJSON(w, http.StatusForbidden, "Forbidden")
+		return
+	}
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
 	items := make([]Notification, 0)
@@ -898,6 +930,9 @@ func (a *app) notificationByID(w http.ResponseWriter, r *http.Request, user User
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
 	for i := range a.store.data.Notifications {
+		if a.store.data.Notifications[i].UserID != user.ID {
+			continue
+		}
 		if a.store.data.Notifications[i].ID == id && a.store.data.Notifications[i].ReadAt == "" {
 			a.store.data.Notifications[i].ReadAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
@@ -923,6 +958,10 @@ func (a *app) markAllNotificationsRead(w http.ResponseWriter, r *http.Request, u
 	if input.UserID == "" {
 		input.UserID = user.ID
 	}
+	if input.UserID != user.ID {
+		errorJSON(w, http.StatusForbidden, "Forbidden")
+		return
+	}
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -936,34 +975,6 @@ func (a *app) markAllNotificationsRead(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (a *app) generateNotification(w http.ResponseWriter, r *http.Request, user User) {
-	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
-		return
-	}
-	var input struct {
-		UserID string `json:"userId"`
-	}
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	if input.UserID == "" {
-		input.UserID = user.ID
-	}
-	a.store.mu.Lock()
-	defer a.store.mu.Unlock()
-	task := Task{Title: "A task"}
-	if len(a.store.data.Tasks) > 0 {
-		task = a.store.data.Tasks[time.Now().Nanosecond()%len(a.store.data.Tasks)]
-	}
-	notification := a.pushNotificationLocked(input.UserID, "task_updated", task)
-	if err := a.store.save(); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "Unable to save notification")
-		return
-	}
-	writeJSON(w, http.StatusCreated, notification)
 }
 
 func (a *app) saveAndWriteUser(w http.ResponseWriter, index int) {
@@ -1060,6 +1071,47 @@ func (a *app) pushNotificationLocked(userID, notificationType string, task Task)
 	return notification
 }
 
+func (a *app) userProjectIDsLocked(user User) map[string]bool {
+	projectIDs := map[string]bool{}
+	for _, project := range a.store.data.Projects {
+		if isProjectMember(project, user.ID) {
+			projectIDs[project.ID] = true
+		}
+	}
+	return projectIDs
+}
+
+func (a *app) visibleUserIDsLocked(user User) map[string]bool {
+	userIDs := map[string]bool{user.ID: true}
+	for _, project := range a.store.data.Projects {
+		if !isProjectMember(project, user.ID) {
+			continue
+		}
+		for _, memberID := range project.MemberIDs {
+			userIDs[memberID] = true
+		}
+	}
+	return userIDs
+}
+
+func (a *app) canAccessProjectLocked(projectID string, user User) bool {
+	for _, project := range a.store.data.Projects {
+		if project.ID == projectID {
+			return isProjectMember(project, user.ID)
+		}
+	}
+	return false
+}
+
+func (a *app) isProjectMemberLocked(projectID, userID string) bool {
+	for _, project := range a.store.data.Projects {
+		if project.ID == projectID {
+			return isProjectMember(project, userID)
+		}
+	}
+	return false
+}
+
 func (a *app) findUserLocked(id string) (User, bool) {
 	for _, user := range a.store.data.Users {
 		if user.ID == id {
@@ -1085,6 +1137,15 @@ func (a *app) taskIndexLocked(id string) int {
 		}
 	}
 	return -1
+}
+
+func isProjectMember(project Project, userID string) bool {
+	for _, memberID := range project.MemberIDs {
+		if memberID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) deleteUserLocked(userID string) {
@@ -1204,33 +1265,4 @@ func defaultSettings(theme, accent string) UserSettings {
 	settings.Notifications.EmailChannel = true
 	settings.Notifications.InAppChannel = true
 	return settings
-}
-
-func seedData() storeData {
-	return storeData{
-		Users: []User{
-			{ID: "usr_1", Name: "Mia Johnson", Email: "mia@flowbit.io", Role: "admin", AvatarURL: "https://i.pravatar.cc/80?img=32", Bio: "Product leader focused on execution quality and customer outcomes.", Workspace: "Flowbit Core Team", Settings: defaultSettings("dark", "sky"), PasswordHash: hashPassword("password123")},
-			{ID: "usr_2", Name: "Arjun Patel", Email: "arjun@flowbit.io", Role: "editor", AvatarURL: "https://i.pravatar.cc/80?img=11", Bio: "Frontend engineer owning board experience and collaboration flows.", Workspace: "Flowbit Core Team", Settings: defaultSettings("light", "emerald"), PasswordHash: hashPassword("password123")},
-			{ID: "usr_3", Name: "Sofia Garcia", Email: "sofia@flowbit.io", Role: "viewer", AvatarURL: "https://i.pravatar.cc/80?img=47", Bio: "Operations partner tracking delivery confidence and release readiness.", Workspace: "Flowbit Core Team", Settings: defaultSettings("light", "rose"), PasswordHash: hashPassword("password123")},
-		},
-		Projects: []Project{
-			{ID: "prj_website", Name: "Website Redesign", Description: "Refresh marketing pages and improve conversion flows.", Color: "#0ea5e9", Visibility: "team", MemberIDs: StringSlice{"usr_1", "usr_2", "usr_3"}, CreatedAt: "2026-02-03T09:00:00.000Z"},
-			{ID: "prj_mobile", Name: "Mobile App", Description: "Build MVP for task management mobile experience.", Color: "#10b981", Visibility: "private", MemberIDs: StringSlice{"usr_1", "usr_3"}, CreatedAt: "2026-03-18T12:30:00.000Z"},
-		},
-		Tasks: []Task{
-			{ID: "tsk_1", ProjectID: "prj_website", Title: "Create new hero section concepts", Description: "Design 3 variants focused on product clarity and CTA hierarchy.", Status: "todo", Priority: "high", Deadline: "2026-04-20T18:00:00.000Z", Position: 0, AssigneeID: "usr_3", CreatedAt: "2026-04-01T07:00:00.000Z", UpdatedAt: "2026-04-01T07:00:00.000Z"},
-			{ID: "tsk_2", ProjectID: "prj_website", Title: "Implement onboarding checklist", Description: "Add progress UI and completion tracking to new workspace setup.", Status: "in_progress", Priority: "high", Deadline: "2026-04-14T17:00:00.000Z", Position: 0, AssigneeID: "usr_2", CreatedAt: "2026-04-02T10:10:00.000Z", UpdatedAt: "2026-04-12T09:40:00.000Z"},
-			{ID: "tsk_3", ProjectID: "prj_website", Title: "Audit old analytics events", Description: "Map legacy event names to new tracking schema before release.", Status: "done", Priority: "medium", Deadline: "2026-04-09T18:00:00.000Z", Position: 0, AssigneeID: "usr_1", CreatedAt: "2026-04-03T14:30:00.000Z", UpdatedAt: "2026-04-10T08:15:00.000Z"},
-			{ID: "tsk_4", ProjectID: "prj_mobile", Title: "Set up React Native CI pipeline", Description: "Configure build and test workflows for iOS and Android targets.", Status: "todo", Priority: "high", Deadline: "2026-04-25T17:00:00.000Z", Position: 0, AssigneeID: "usr_2", CreatedAt: "2026-04-05T06:45:00.000Z", UpdatedAt: "2026-04-05T06:45:00.000Z"},
-			{ID: "tsk_5", ProjectID: "prj_mobile", Title: "Prototype offline task sync", Description: "Validate conflict resolution strategy and queue retry policy.", Status: "in_progress", Priority: "high", Deadline: "2026-04-18T12:00:00.000Z", Position: 0, AssigneeID: "usr_3", CreatedAt: "2026-04-07T11:20:00.000Z", UpdatedAt: "2026-04-15T16:00:00.000Z"},
-		},
-		Comments: []TaskComment{
-			{ID: "cmt_1", TaskID: "tsk_1", AuthorID: "usr_1", Body: "Please include one concept optimized for mobile first.", CreatedAt: "2026-04-11T10:00:00.000Z"},
-			{ID: "cmt_2", TaskID: "tsk_2", AuthorID: "usr_3", Body: "Tracking API names have been aligned in the docs.", CreatedAt: "2026-04-12T14:30:00.000Z"},
-		},
-		Notifications: []Notification{
-			{ID: "ntf_1", UserID: "usr_2", Type: "task_updated", Title: "Task moved to In Progress", Message: "Onboarding checklist was moved by Mia Johnson.", CreatedAt: "2026-04-17T10:30:00.000Z"},
-			{ID: "ntf_2", UserID: "usr_2", Type: "deadline_approaching", Title: "Deadline is today", Message: "Prototype offline task sync is due soon.", CreatedAt: "2026-04-18T08:10:00.000Z", ReadAt: "2026-04-18T09:00:00.000Z"},
-		},
-	}
 }

@@ -5,5 +5,4 @@ export const notificationApi = {
   list: (userId: ID) => getApiClient().listNotifications(userId),
   markRead: (notificationId: ID) => getApiClient().markNotificationRead(notificationId),
   markAllRead: (userId: ID) => getApiClient().markAllNotificationsRead(userId),
-  generate: (userId: ID) => getApiClient().generateNotification(userId),
 };

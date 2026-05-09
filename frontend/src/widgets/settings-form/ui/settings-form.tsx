@@ -8,6 +8,7 @@ import { Modal } from "@/shared/ui/modal";
 import { Switch } from "@/shared/ui/switch";
 import { Avatar } from "@/shared/ui/avatar";
 import { Toast } from "@/shared/ui/toast";
+import { Select } from "@/shared/ui/select";
 import type { User } from "@/shared/types/domain";
 import { useUpdateProfile } from "@/features/update-profile/model/use-update-profile";
 import { useUploadAvatar } from "@/features/upload-avatar/model/use-upload-avatar";
@@ -263,15 +264,16 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
             <div className="rounded-md bg-surface-muted p-3 text-sm">
               <p className="font-medium">Role</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <select
+                <Select
                   value={role}
                   onChange={(event) => setRole(event.target.value as User["role"])}
-                  className="rounded-md border border-border bg-surface px-2 py-1"
+                  wrapperClassName="w-40"
+                  className="h-9 rounded-lg bg-surface py-1 text-sm"
                 >
                   <option value="admin">admin</option>
                   <option value="editor">editor</option>
                   <option value="viewer">viewer</option>
-                </select>
+                </Select>
                 <Button
                   variant="secondary"
                   className="min-h-8 px-3 py-1 text-xs"

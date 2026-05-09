@@ -7,6 +7,7 @@ import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Card } from "@/shared/ui/card";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
+import { Select } from "@/shared/ui/select";
 import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
 import { VisibilityBadge } from "@/entities/project/ui/visibility-badge";
 import { useProjectsStore } from "@/entities/project/model/store";
@@ -24,7 +25,7 @@ export default function ProjectBoardPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
 
-  const { projects, loadProjects } = useProjectsStore();
+  const { projects, isLoading: projectsLoading, loadProjects } = useProjectsStore();
   const {
     tasks,
     users,
@@ -75,32 +76,49 @@ export default function ProjectBoardPage() {
 
   return (
     <AppShell>
+      {!projectsLoading && !project ? (
+        <Card className="mb-5">
+          <div className="space-y-3">
+            <div>
+              <h1 className="text-xl font-semibold">Workspace not found</h1>
+              <p className="mt-1 text-sm text-muted">
+                This workspace is not available for the current account.
+              </p>
+            </div>
+            <Link href="/">
+              <Button variant="secondary">Back to all tasks</Button>
+            </Link>
+          </div>
+        </Card>
+      ) : null}
+
+      {project ? (
+        <>
       <Card className="mb-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold">{project?.name ?? "Project"}</h1>
-          {project ? <VisibilityBadge visibility={project.visibility} /> : null}
+          <h1 className="text-xl font-semibold">{project.name}</h1>
+          <VisibilityBadge visibility={project.visibility} />
         </div>
-        <p className="mt-1 text-sm text-foreground/70">{project?.description}</p>
-        {project ? (
+        <p className="mt-1 text-sm text-foreground/70">{project.description}</p>
           <div className="mt-3 flex items-center gap-2">
             <label htmlFor="visibility" className="text-xs text-foreground/60">
               Board visibility
             </label>
-            <select
+            <Select
               id="visibility"
               value={project.visibility}
               onChange={(event) =>
                 changeBoardVisibility(project.id, event.target.value as typeof project.visibility)
               }
               disabled={!permissions.canManageProjectSettings}
-              className="rounded-md border border-border bg-surface-muted px-2 py-1 text-xs"
+              wrapperClassName="w-28"
+              className="h-8 rounded-lg bg-surface-muted px-2 text-xs"
             >
               <option value="private">Private</option>
               <option value="team">Team</option>
               <option value="public">Public</option>
-            </select>
+            </Select>
           </div>
-        ) : null}
       </Card>
 
       {error ? <p className="mb-4 text-sm text-rose-500">{error}</p> : null}
@@ -116,6 +134,8 @@ export default function ProjectBoardPage() {
           setCreateModalOpen(true);
         }}
       />
+        </>
+      ) : null}
 
       <Modal open={createModalOpen} title="New task" onClose={() => setCreateModalOpen(false)}>
         {project ? (

@@ -4,8 +4,6 @@ import { create } from "zustand";
 import { notificationApi } from "@/entities/notification/api/notification-api";
 import type { Notification } from "@/shared/types/domain";
 
-let intervalId: ReturnType<typeof setInterval> | undefined;
-
 interface NotificationsState {
   notifications: Notification[];
   isPanelOpen: boolean;
@@ -14,8 +12,6 @@ interface NotificationsState {
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: (userId: string) => Promise<void>;
   setPanelOpen: (open: boolean) => void;
-  startRealtime: (userId: string) => void;
-  stopRealtime: () => void;
 }
 
 export const useNotificationsStore = create<NotificationsState>((set, get) => ({
@@ -66,27 +62,6 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   },
 
   setPanelOpen: (open) => set({ isPanelOpen: open }),
-
-  startRealtime: (userId) => {
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
-    intervalId = setInterval(async () => {
-      try {
-        const notification = await notificationApi.generate(userId);
-        set({ notifications: [notification, ...get().notifications] });
-      } catch {
-        // Keep polling quiet when the API is temporarily unavailable.
-      }
-    }, 12000);
-  },
-
-  stopRealtime: () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = undefined;
-    }
-  },
 }));
 
 export const unreadCount = (notifications: Notification[]): number =>

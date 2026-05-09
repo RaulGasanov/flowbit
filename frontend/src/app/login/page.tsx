@@ -10,10 +10,10 @@ import { useAuthStore } from "@/entities/auth/model/store";
 export default function LoginPage() {
   const router = useRouter();
   const { token, isReady, isLoading, error, login, register } = useAuthStore();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">("register");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("mia@flowbit.io");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitError, setSubmitError] = useState<string>();
 
   useEffect(() => {
