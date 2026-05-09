@@ -2,6 +2,7 @@ import { getApiClient } from "@/shared/api/base";
 import type {
   ChangePasswordInput,
   UpdateUserProfileInput,
+  UpdateUserRoleInput,
   UpdateUserSettingsInput,
   UploadAvatarInput,
 } from "@/shared/api/model/contracts";
@@ -11,6 +12,7 @@ export const userApi = {
   list: () => getApiClient().listUsers(),
   updateProfile: (userId: string, input: UpdateUserProfileInput) =>
     getApiClient().updateUserProfile(userId, input),
+  updateRole: (input: UpdateUserRoleInput) => getApiClient().updateUserRole(input),
   updateSettings: (userId: string, input: UpdateUserSettingsInput) =>
     getApiClient().updateUserSettings(userId, input),
   uploadAvatar: (userId: string, input: UploadAvatarInput) =>

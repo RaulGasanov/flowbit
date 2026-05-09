@@ -318,6 +318,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("/api/auth/login", a.login)
 	mux.HandleFunc("/api/auth/register", a.register)
 	mux.HandleFunc("/api/users/me", a.requireAuth(a.me))
+	mux.HandleFunc("/api/users/role", a.requireAuth(a.updateUserRoleByEmail))
 	mux.HandleFunc("/api/users/", a.requireAuth(a.userByID))
 	mux.HandleFunc("/api/users", a.requireAuth(a.users))
 	mux.HandleFunc("/api/projects/", a.requireAuth(a.projectByID))
@@ -395,14 +396,23 @@ func (a *app) register(w http.ResponseWriter, r *http.Request) {
 		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Role     string `json:"role"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Email = strings.TrimSpace(input.Email)
+	input.Role = strings.TrimSpace(input.Role)
 	if input.Name == "" || input.Email == "" || len(input.Password) < 8 {
 		errorJSON(w, http.StatusBadRequest, "Name, valid email and 8+ character password are required")
+		return
+	}
+	if input.Role == "" {
+		input.Role = "viewer"
+	}
+	if !isValidUserRole(input.Role) {
+		errorJSON(w, http.StatusBadRequest, "Invalid role")
 		return
 	}
 
@@ -414,15 +424,11 @@ func (a *app) register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	role := "editor"
-	if len(a.store.data.Users) == 0 {
-		role = "admin"
-	}
 	user := User{
 		ID:           randomID("usr"),
 		Name:         input.Name,
 		Email:        input.Email,
-		Role:         role,
+		Role:         input.Role,
 		Bio:          "",
 		Workspace:    input.Name + "'s workspace",
 		AvatarURL:    "",
@@ -464,6 +470,54 @@ func (a *app) users(w http.ResponseWriter, r *http.Request, user User) {
 	writeJSON(w, http.StatusOK, users)
 }
 
+func (a *app) updateUserRoleByEmail(w http.ResponseWriter, r *http.Request, current User) {
+	if r.Method != http.MethodPatch {
+		methodNotAllowed(w)
+		return
+	}
+	if current.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "Only admin can update roles")
+		return
+	}
+	var input struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Email = strings.TrimSpace(input.Email)
+	input.Role = strings.TrimSpace(input.Role)
+	if input.Email == "" || input.Role == "" {
+		errorJSON(w, http.StatusBadRequest, "Email and role are required")
+		return
+	}
+	if !isValidUserRole(input.Role) {
+		errorJSON(w, http.StatusBadRequest, "Invalid role")
+		return
+	}
+
+	a.store.mu.Lock()
+	defer a.store.mu.Unlock()
+	index := -1
+	for i, user := range a.store.data.Users {
+		if strings.EqualFold(user.Email, input.Email) {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		errorJSON(w, http.StatusNotFound, "User with this email was not found")
+		return
+	}
+	if a.store.data.Users[index].ID == current.ID {
+		errorJSON(w, http.StatusBadRequest, "You cannot change your own role")
+		return
+	}
+	a.store.data.Users[index].Role = input.Role
+	a.saveAndWriteUser(w, index)
+}
+
 func (a *app) userByID(w http.ResponseWriter, r *http.Request, current User) {
 	parts := pathParts(r.URL.Path, "/api/users/")
 	if len(parts) < 1 {
@@ -490,7 +544,6 @@ func (a *app) userByID(w http.ResponseWriter, r *http.Request, current User) {
 			Name  string `json:"name"`
 			Email string `json:"email"`
 			Bio   string `json:"bio"`
-			Role  string `json:"role"`
 		}
 		if !decodeJSON(w, r, &input) {
 			return
@@ -502,13 +555,6 @@ func (a *app) userByID(w http.ResponseWriter, r *http.Request, current User) {
 			a.store.data.Users[index].Email = strings.TrimSpace(input.Email)
 		}
 		a.store.data.Users[index].Bio = input.Bio
-		if input.Role != "" && (current.ID == userID || current.Role == "admin") {
-			if !isValidUserRole(input.Role) {
-				errorJSON(w, http.StatusBadRequest, "Invalid role")
-				return
-			}
-			a.store.data.Users[index].Role = input.Role
-		}
 		a.saveAndWriteUser(w, index)
 	case r.Method == http.MethodPatch && len(parts) == 2 && parts[1] == "settings":
 		var input struct {

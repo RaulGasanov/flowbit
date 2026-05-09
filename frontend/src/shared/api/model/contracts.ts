@@ -65,7 +65,11 @@ export interface UpdateUserProfileInput {
   name?: string;
   email?: string;
   bio?: string;
-  role?: UserRole;
+}
+
+export interface UpdateUserRoleInput {
+  email: string;
+  role: UserRole;
 }
 
 export interface UpdateUserSettingsInput {
@@ -89,6 +93,7 @@ export interface AuthCredentials {
 
 export interface RegisterInput extends AuthCredentials {
   name: string;
+  role: UserRole;
 }
 
 export interface AuthSession {
@@ -117,6 +122,7 @@ export interface ApiClient {
   markNotificationRead(notificationId: ID): Promise<void>;
   markAllNotificationsRead(userId: ID): Promise<void>;
   updateUserProfile(userId: ID, input: UpdateUserProfileInput): Promise<User>;
+  updateUserRole(input: UpdateUserRoleInput): Promise<User>;
   updateUserSettings(userId: ID, input: UpdateUserSettingsInput): Promise<User>;
   uploadAvatar(userId: ID, input: UploadAvatarInput): Promise<{ avatarUrl: string }>;
   changePassword(userId: ID, input: ChangePasswordInput): Promise<void>;

@@ -11,6 +11,7 @@ import type {
   UpdateProjectInput,
   UpdateTaskInput,
   UpdateUserProfileInput,
+  UpdateUserRoleInput,
   UpdateUserSettingsInput,
   UploadAvatarInput,
 } from "@/shared/api/model/contracts";
@@ -101,6 +102,8 @@ export const httpApiClient: ApiClient = {
   listUsers: () => request("/users"),
   updateUserProfile: (userId: ID, input: UpdateUserProfileInput) =>
     request(`/users/${userId}/profile`, { method: "PATCH", body: JSON.stringify(input) }),
+  updateUserRole: (input: UpdateUserRoleInput) =>
+    request("/users/role", { method: "PATCH", body: JSON.stringify(input) }),
   updateUserSettings: (userId: ID, input: UpdateUserSettingsInput) =>
     request(`/users/${userId}/settings`, { method: "PATCH", body: JSON.stringify(input) }),
   uploadAvatar: (userId: ID, input: UploadAvatarInput) =>
