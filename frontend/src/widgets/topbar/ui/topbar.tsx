@@ -173,9 +173,12 @@ export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: Topbar
             type="button"
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-panel text-muted transition hover:bg-panel-muted hover:text-foreground"
             aria-label="Toggle sidebar"
+            title="Toggle sidebar"
             onClick={onToggleSidebar}
          >
-           <span className="h-0.5 w-4 rounded-full bg-current shadow-[0_5px_0_current,0_-5px_0_current]" />
+           <span className="relative block h-4 w-4 rounded-[4px] border-2 border-current">
+             <span className="absolute bottom-0 left-1 top-0 w-0 border-l-2 border-current" />
+           </span>
          </button>
 
          <nav className="hidden min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-panel-muted p-1 md:flex">
