@@ -68,7 +68,12 @@ export default function TaskPage() {
             comments={comments}
             users={users}
             canComment={permissions.canComment}
+            canEdit={permissions.canEditTask}
             canDelete={permissions.canDeleteTask}
+            onUpdateTask={async (input) => {
+              const updated = await taskApi.update(task.id, input);
+              setTask(updated);
+            }}
             onAddComment={async (body) => {
               if (!currentUser) {
                 return;
@@ -78,7 +83,7 @@ export default function TaskPage() {
                 authorId: currentUser.id,
                 body,
               });
-              setComments((previous) => [...previous, comment]);
+              setComments((previous) => [comment, ...previous]);
             }}
             onDeleteTask={async () => {
               await taskApi.remove(task.id);

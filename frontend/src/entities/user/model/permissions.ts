@@ -9,6 +9,16 @@ export interface Permissions {
 }
 
 export const permissionsByRole = (role: UserRole): Permissions => {
+  if (role === "guest") {
+    return {
+      canCreateTask: false,
+      canEditTask: false,
+      canDeleteTask: false,
+      canManageProjectSettings: false,
+      canComment: false,
+    };
+  }
+
   if (role === "admin") {
     return {
       canCreateTask: true,

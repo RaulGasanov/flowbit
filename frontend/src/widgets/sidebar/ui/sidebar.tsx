@@ -61,9 +61,6 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
                 <span className="grid h-5 w-5 place-items-center text-base text-muted">⌂</span>
                 Dashboard
               </span>
-              <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                {projects.length}
-              </span>
             </Link>
             <Link
               href="/profile"

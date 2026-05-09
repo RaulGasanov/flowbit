@@ -8,18 +8,20 @@ import { Card } from "@/shared/ui/card";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Select } from "@/shared/ui/select";
+import { Toast } from "@/shared/ui/toast";
 import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
 import { VisibilityBadge } from "@/entities/project/ui/visibility-badge";
 import { useProjectsStore } from "@/entities/project/model/store";
+import { projectApi } from "@/entities/project/api/project-api";
 import { KanbanBoard } from "@/widgets/board/ui/kanban-board";
 import { TaskCreateForm } from "@/features/create-task/ui/task-create-form";
 import { useCreateTask } from "@/features/create-task/model/use-create-task";
+import { useEditTask } from "@/features/edit-task/model/use-edit-task";
 import { useMoveTask } from "@/features/move-task/model/use-move-task";
 import { useAddComment } from "@/features/add-comment/model/use-add-comment";
 import { useChangeBoardVisibility } from "@/features/change-board-visibility/model/use-change-board-visibility";
 import { TaskDetails } from "@/entities/task/ui/task-details";
 import { useTasksStore } from "@/entities/task/model/store";
-import type { TaskStatus } from "@/shared/types/domain";
 
 export default function ProjectBoardPage() {
   const params = useParams<{ id: string }>();
@@ -43,11 +45,17 @@ export default function ProjectBoardPage() {
   const currentUser = useCurrentUser();
   const permissions = useCurrentPermissions();
   const createTask = useCreateTask();
+  const editTask = useEditTask();
   const moveTask = useMoveTask();
   const addComment = useAddComment();
   const changeBoardVisibility = useChangeBoardVisibility();
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createTaskStatus, setCreateTaskStatus] = useState<TaskStatus>("todo");
+  const [statusToast, setStatusToast] = useState<{ tone: "success" | "error"; message: string }>();
+
+  const showMessage = (message: string, tone: "success" | "error" = "success") => {
+    setStatusToast({ message, tone });
+    window.setTimeout(() => setStatusToast(undefined), 3200);
+  };
 
   useEffect(() => {
     loadProjects();
@@ -75,7 +83,13 @@ export default function ProjectBoardPage() {
   }, []);
 
   return (
-    <AppShell>
+    <AppShell showSearch>
+      <Toast
+        open={Boolean(statusToast)}
+        tone={statusToast?.tone ?? "success"}
+        message={statusToast?.message ?? ""}
+        onClose={() => setStatusToast(undefined)}
+      />
       {!projectsLoading && !project ? (
         <Card className="mb-5">
           <div className="space-y-3">
@@ -95,9 +109,27 @@ export default function ProjectBoardPage() {
       {project ? (
         <>
       <Card className="mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold">{project.name}</h1>
-          <VisibilityBadge visibility={project.visibility} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold">{project.name}</h1>
+            <VisibilityBadge visibility={project.visibility} />
+          </div>
+          <Button
+            variant="secondary"
+            className="h-9 min-h-9 rounded-lg px-4 text-sm"
+            onClick={async () => {
+              try {
+                const { token } = await projectApi.share(project.id);
+                const link = `${window.location.origin}/guest/workspaces/${token}`;
+                await navigator.clipboard?.writeText(link);
+                showMessage("Workspace link copied");
+              } catch (shareError) {
+                showMessage(shareError instanceof Error ? shareError.message : "Unable to create share link", "error");
+              }
+            }}
+          >
+            Share
+          </Button>
         </div>
         <p className="mt-1 text-sm text-foreground/70">{project.description}</p>
           <div className="mt-3 flex items-center gap-2">
@@ -129,10 +161,6 @@ export default function ProjectBoardPage() {
         isLoading={isLoading}
         onOpenTask={selectTask}
         onMoveTask={moveTask}
-        onAddTask={(status) => {
-          setCreateTaskStatus(status);
-          setCreateModalOpen(true);
-        }}
       />
         </>
       ) : null}
@@ -143,7 +171,7 @@ export default function ProjectBoardPage() {
             projectId={project.id}
             users={users}
             disabled={!permissions.canCreateTask}
-            initialStatus={createTaskStatus}
+            initialStatus="todo"
             onCreate={async (input) => {
               await createTask(input);
               setCreateModalOpen(false);
@@ -161,7 +189,11 @@ export default function ProjectBoardPage() {
               comments={selectedComments}
               users={users}
               canComment={permissions.canComment}
+              canEdit={permissions.canEditTask}
               canDelete={permissions.canDeleteTask}
+              onUpdateTask={async (input) => {
+                await editTask(selectedTask.id, input);
+              }}
               onAddComment={async (body) => {
                 if (!currentUser) {
                   return;

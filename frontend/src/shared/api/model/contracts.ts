@@ -3,6 +3,7 @@ import type {
   Notification,
   Project,
   ProjectVisibility,
+  SharedWorkspace,
   ThemePreference,
   Task,
   TaskComment,
@@ -101,6 +102,10 @@ export interface AuthSession {
   user: User;
 }
 
+export interface ShareProjectResponse {
+  token: string;
+}
+
 export interface ApiClient {
   login(input: AuthCredentials): Promise<AuthSession>;
   register(input: RegisterInput): Promise<AuthSession>;
@@ -109,6 +114,8 @@ export interface ApiClient {
   getProjectById(id: ID): Promise<Project | null>;
   createProject(input: CreateProjectInput): Promise<Project>;
   updateProject(id: ID, input: UpdateProjectInput): Promise<Project>;
+  shareProject(id: ID): Promise<ShareProjectResponse>;
+  getSharedWorkspace(token: string): Promise<SharedWorkspace>;
   listUsers(): Promise<User[]>;
   listTasks(query?: TaskQuery): Promise<Task[]>;
   getTaskById(id: ID): Promise<Task | null>;

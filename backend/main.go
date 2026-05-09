@@ -89,6 +89,7 @@ type Project struct {
 	Color       string      `json:"color" gorm:"not null"`
 	Visibility  string      `json:"visibility" gorm:"not null"`
 	MemberIDs   StringSlice `json:"memberIds" gorm:"column:member_ids;type:jsonb;not null"`
+	ShareToken  string      `json:"shareToken,omitempty" gorm:"column:share_token;type:text;not null;default:''"`
 	CreatedAt   string      `json:"createdAt" gorm:"not null"`
 }
 
@@ -195,10 +196,14 @@ func newStore(databaseURL string) (*appStore, error) {
 
 func (s *appStore) migrate() error {
 	for _, model := range []any{&User{}, &Project{}, &Task{}, &TaskComment{}, &Notification{}} {
-		if s.db.Migrator().HasTable(model) {
-			continue
+		if !s.db.Migrator().HasTable(model) {
+			if err := s.db.Migrator().CreateTable(model); err != nil {
+				return err
+			}
 		}
-		if err := s.db.Migrator().CreateTable(model); err != nil {
+	}
+	if s.db.Migrator().HasTable(&Project{}) && !s.db.Migrator().HasColumn(&Project{}, "ShareToken") {
+		if err := s.db.Migrator().AddColumn(&Project{}, "ShareToken"); err != nil {
 			return err
 		}
 	}
@@ -317,6 +322,7 @@ func (a *app) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/auth/login", a.login)
 	mux.HandleFunc("/api/auth/register", a.register)
+	mux.HandleFunc("/api/shared/workspaces/", a.sharedWorkspace)
 	mux.HandleFunc("/api/users/me", a.requireAuth(a.me))
 	mux.HandleFunc("/api/users/role", a.requireAuth(a.updateUserRoleByEmail))
 	mux.HandleFunc("/api/users/", a.requireAuth(a.userByID))
@@ -468,6 +474,52 @@ func (a *app) users(w http.ResponseWriter, r *http.Request, user User) {
 		}
 	}
 	writeJSON(w, http.StatusOK, users)
+}
+
+func (a *app) sharedWorkspace(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	token := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/shared/workspaces/"), "/")
+	if token == "" {
+		errorJSON(w, http.StatusNotFound, "Shared workspace not found")
+		return
+	}
+
+	a.store.mu.Lock()
+	defer a.store.mu.Unlock()
+	project, ok := a.projectByShareTokenLocked(token)
+	if !ok {
+		errorJSON(w, http.StatusNotFound, "Shared workspace not found")
+		return
+	}
+
+	tasks := make([]Task, 0)
+	for _, task := range a.store.data.Tasks {
+		if task.ProjectID == project.ID {
+			tasks = append(tasks, task)
+		}
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].Status == tasks[j].Status {
+			return tasks[i].Position < tasks[j].Position
+		}
+		return tasks[i].Status < tasks[j].Status
+	})
+
+	users := make([]User, 0)
+	for _, user := range a.store.data.Users {
+		if isProjectMember(project, user.ID) {
+			users = append(users, user)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"project": project,
+		"tasks":   tasks,
+		"users":   users,
+	})
 }
 
 func (a *app) updateUserRoleByEmail(w http.ResponseWriter, r *http.Request, current User) {
@@ -698,14 +750,16 @@ func (a *app) projects(w http.ResponseWriter, r *http.Request, user User) {
 }
 
 func (a *app) projectByID(w http.ResponseWriter, r *http.Request, user User) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+	prefix := "/api/projects/"
 	if strings.HasPrefix(r.URL.Path, "/api/workspaces/") {
-		id = strings.TrimPrefix(r.URL.Path, "/api/workspaces/")
+		prefix = "/api/workspaces/"
 	}
-	if id == "" {
+	parts := pathParts(r.URL.Path, prefix)
+	if len(parts) == 0 {
 		a.projects(w, r, user)
 		return
 	}
+	id := parts[0]
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
 	index := -1
@@ -727,7 +781,18 @@ func (a *app) projectByID(w http.ResponseWriter, r *http.Request, user User) {
 		writeJSON(w, http.StatusOK, a.store.data.Projects[index])
 		return
 	}
-	if r.Method == http.MethodPatch {
+	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "share" {
+		if a.store.data.Projects[index].ShareToken == "" {
+			a.store.data.Projects[index].ShareToken = randomID("shr")
+			if err := a.store.save(); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "Unable to create share link")
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"token": a.store.data.Projects[index].ShareToken})
+		return
+	}
+	if r.Method == http.MethodPatch && len(parts) == 1 {
 		var input struct {
 			Visibility string `json:"visibility"`
 		}
@@ -785,25 +850,29 @@ func (a *app) tasks(w http.ResponseWriter, r *http.Request, user User) {
 			errorJSON(w, http.StatusBadRequest, "Assignee is not a workspace member")
 			return
 		}
+		status := input.Status
+		if status == "" {
+			status = "todo"
+		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		task := Task{
 			ID:          randomID("tsk"),
 			ProjectID:   input.ProjectID,
 			Title:       strings.TrimSpace(input.Title),
 			Description: input.Description,
-			Status:      input.Status,
+			Status:      status,
 			Priority:    input.Priority,
 			Deadline:    input.Deadline,
-			Position:    a.nextPositionLocked(input.ProjectID, input.Status),
+			Position:    a.nextPositionLocked(input.ProjectID, status),
 			AssigneeID:  input.AssigneeID,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
-		if task.Status == "" {
-			task.Status = "todo"
-			task.Position = a.nextPositionLocked(input.ProjectID, task.Status)
+		if task.Title == "" {
+			errorJSON(w, http.StatusBadRequest, "Task title is required")
+			return
 		}
-		a.store.data.Tasks = append([]Task{task}, a.store.data.Tasks...)
+		a.store.data.Tasks = append(a.store.data.Tasks, task)
 		if err := a.store.save(); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "Unable to create task")
 			return
@@ -838,32 +907,45 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 	case r.Method == http.MethodGet && len(parts) == 1:
 		writeJSON(w, http.StatusOK, a.store.data.Tasks[index])
 	case r.Method == http.MethodPatch && len(parts) == 1:
-		var input Task
+		var input struct {
+			Title       *string `json:"title"`
+			Description *string `json:"description"`
+			Status      *string `json:"status"`
+			Priority    *string `json:"priority"`
+			Deadline    *string `json:"deadline"`
+			AssigneeID  *string `json:"assigneeId"`
+		}
 		if !decodeJSON(w, r, &input) {
 			return
 		}
 		task := a.store.data.Tasks[index]
-		if input.Title != "" {
-			task.Title = input.Title
+		if input.Title != nil {
+			title := strings.TrimSpace(*input.Title)
+			if title == "" {
+				errorJSON(w, http.StatusBadRequest, "Task title is required")
+				return
+			}
+			task.Title = title
 		}
-		if input.Description != "" {
-			task.Description = input.Description
+		if input.Description != nil {
+			task.Description = strings.TrimSpace(*input.Description)
 		}
-		if input.Status != "" {
-			task.Status = input.Status
+		if input.Status != nil && *input.Status != "" {
+			task.Status = *input.Status
 		}
-		if input.Priority != "" {
-			task.Priority = input.Priority
+		if input.Priority != nil && *input.Priority != "" {
+			task.Priority = *input.Priority
 		}
-		if input.Deadline != "" {
-			task.Deadline = input.Deadline
+		if input.Deadline != nil {
+			task.Deadline = strings.TrimSpace(*input.Deadline)
 		}
-		if input.AssigneeID != "" {
-			if !a.isProjectMemberLocked(task.ProjectID, input.AssigneeID) {
+		if input.AssigneeID != nil {
+			assigneeID := strings.TrimSpace(*input.AssigneeID)
+			if assigneeID != "" && !a.isProjectMemberLocked(task.ProjectID, assigneeID) {
 				errorJSON(w, http.StatusBadRequest, "Assignee is not a workspace member")
 				return
 			}
-			task.AssigneeID = input.AssigneeID
+			task.AssigneeID = assigneeID
 		}
 		task.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		a.store.data.Tasks[index] = task
@@ -910,7 +992,7 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 				comments = append(comments, comment)
 			}
 		}
-		sort.Slice(comments, func(i, j int) bool { return comments[i].CreatedAt < comments[j].CreatedAt })
+		sort.Slice(comments, func(i, j int) bool { return comments[i].CreatedAt > comments[j].CreatedAt })
 		writeJSON(w, http.StatusOK, comments)
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "comments":
 		var input struct {
@@ -1158,6 +1240,15 @@ func (a *app) isProjectMemberLocked(projectID, userID string) bool {
 	return false
 }
 
+func (a *app) projectByShareTokenLocked(token string) (Project, bool) {
+	for _, project := range a.store.data.Projects {
+		if project.ShareToken == token {
+			return project, true
+		}
+	}
+	return Project{}, false
+}
+
 func (a *app) findUserLocked(id string) (User, bool) {
 	for _, user := range a.store.data.Users {
 		if user.ID == id {
@@ -1295,7 +1386,7 @@ func randomID(prefix string) string {
 }
 
 func isValidUserRole(role string) bool {
-	return role == "admin" || role == "editor" || role == "viewer"
+	return role == "admin" || role == "editor" || role == "viewer" || role == "guest"
 }
 
 func hashPassword(password string) string {

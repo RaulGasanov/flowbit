@@ -41,6 +41,7 @@ export const TaskCreateForm = ({
   const [deadline, setDeadline] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
+  const [workspaceError, setWorkspaceError] = useState<string>();
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -48,11 +49,12 @@ export const TaskCreateForm = ({
       return;
     }
     if (!selectedProjectId) {
-      setError("Choose a workspace");
+      setWorkspaceError("Choose a workspace");
       return;
     }
     setIsSubmitting(true);
     setError(undefined);
+    setWorkspaceError(undefined);
     try {
       await onCreate({
         projectId: selectedProjectId,
@@ -164,7 +166,10 @@ export const TaskCreateForm = ({
           Workspace
           <Select
             value={selectedProjectId}
-            onChange={(event) => setSelectedProjectId(event.target.value)}
+            onChange={(event) => {
+              setSelectedProjectId(event.target.value);
+              setWorkspaceError(undefined);
+            }}
             className="border-border/70 bg-surface"
             disabled={disabled}
           >
@@ -175,6 +180,7 @@ export const TaskCreateForm = ({
               </option>
             ))}
           </Select>
+          {workspaceError ? <span className="text-sm font-normal text-rose-500">{workspaceError}</span> : null}
         </label>
       ) : null}
       <Button type="submit" variant="primary" disabled={disabled || isSubmitting} className="w-full">

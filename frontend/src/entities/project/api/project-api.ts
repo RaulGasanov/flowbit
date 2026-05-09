@@ -7,4 +7,6 @@ export const projectApi = {
   getById: (id: ID) => getApiClient().getProjectById(id),
   create: (input: CreateProjectInput) => getApiClient().createProject(input),
   update: (id: ID, input: UpdateProjectInput) => getApiClient().updateProject(id, input),
+  share: (id: ID) => getApiClient().shareProject(id),
+  getShared: (token: string) => getApiClient().getSharedWorkspace(token),
 };

@@ -29,7 +29,6 @@ interface KanbanBoardProps {
   isLoading?: boolean;
   onOpenTask: (taskId: string) => void;
   onMoveTask: (taskId: string, status: TaskStatus, index: number) => void | Promise<void>;
-  onAddTask?: (status: TaskStatus) => void;
 }
 
 const columns: Array<{ key: TaskStatus; label: string }> = [
@@ -108,7 +107,6 @@ export const KanbanBoard = ({
   isLoading = false,
   onOpenTask,
   onMoveTask,
-  onAddTask,
 }: KanbanBoardProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -182,15 +180,6 @@ export const KanbanBoard = ({
                   {isLoading ? "…" : tasksByStatus[column.key].length}
                 </span>
               </div>
-              <button
-                type="button"
-                className="grid h-8 w-8 place-items-center rounded-md text-xl leading-none text-muted hover:bg-panel hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label={`Add ${column.label} task`}
-                disabled={!canEdit || isLoading}
-                onClick={() => onAddTask?.(column.key)}
-              >
-                +
-              </button>
             </header>
             <SortableContext
               items={tasksByStatus[column.key].map((task) => task.id)}

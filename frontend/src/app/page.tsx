@@ -7,7 +7,6 @@ import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Avatar } from "@/shared/ui/avatar";
 import { Toast } from "@/shared/ui/toast";
-import { Select } from "@/shared/ui/select";
 import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
 import { useProjectsStore } from "@/entities/project/model/store";
 import { BoardSkeleton } from "@/widgets/board/ui/board-skeleton";
@@ -16,20 +15,39 @@ import { TaskCreateForm } from "@/features/create-task/ui/task-create-form";
 import { useCreateTask } from "@/features/create-task/model/use-create-task";
 import { useMoveTask } from "@/features/move-task/model/use-move-task";
 import { useAddComment } from "@/features/add-comment/model/use-add-comment";
+import { useEditTask } from "@/features/edit-task/model/use-edit-task";
 import { TaskDetails } from "@/entities/task/ui/task-details";
+import { formatTaskDeadline, getDeadlineState } from "@/entities/task/lib/deadline";
 import { useTasksStore } from "@/entities/task/model/store";
 import type { Task, TaskPriority, TaskStatus, User } from "@/shared/types/domain";
 
-type TaskFilterColumn = "none" | "taskId" | "taskName" | "assigned" | "due" | "priority" | "progress";
-
 interface TaskFilter {
-  column: TaskFilterColumn;
-  value: string;
+  hideCompleted: boolean;
+  taskId: string;
+  taskName: string;
+  assigneeIds: string[];
+  due: string[];
+  priorities: TaskPriority[];
+  statuses: TaskStatus[];
 }
 
 type StatusToast = { message: string; tone: "success" | "error" };
+type SortDirection = "none" | "asc" | "desc";
 
-const emptyTaskFilter: TaskFilter = { column: "none", value: "" };
+const defaultTaskFilter: TaskFilter = {
+  hideCompleted: true,
+  taskId: "",
+  taskName: "",
+  assigneeIds: [],
+  due: [],
+  priorities: [],
+  statuses: [],
+};
+
+const emptyTaskFilter: TaskFilter = {
+  ...defaultTaskFilter,
+  hideCompleted: false,
+};
 
 const priorityTone: Record<TaskPriority, string> = {
   low: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-900",
@@ -49,31 +67,12 @@ const progressLabel: Record<TaskStatus, string> = {
   done: "Finish",
 };
 
-const taskFilterColumns: Array<{ value: TaskFilterColumn; label: string }> = [
-  { value: "none", label: "No filter" },
-  { value: "taskId", label: "Task ID" },
-  { value: "taskName", label: "Task Name" },
-  { value: "assigned", label: "Assigned" },
-  { value: "due", label: "Due" },
-  { value: "priority", label: "Priority" },
-  { value: "progress", label: "Progress" },
-];
-
 const dueFilterOptions = [
   { value: "overdue", label: "Overdue" },
   { value: "no_due", label: "No due date" },
   { value: "this_week", label: "This week" },
   { value: "future", label: "Future" },
 ];
-
-const formatShortDate = (date?: string) =>
-  date
-    ? new Intl.DateTimeFormat("en", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date(date))
-    : "-";
 
 const isSameWeek = (date: Date, current: Date) => {
   const start = new Date(current);
@@ -106,58 +105,48 @@ const matchesDueFilter = (task: Task, value: string) => {
   return true;
 };
 
+const toggleValue = <T extends string>(values: T[], value: T) =>
+  values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+
 const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
-  if (filter.column === "none" || !filter.value.trim()) {
-    return true;
+  if (filter.hideCompleted && task.status === "done") {
+    return false;
   }
-  const value = filter.value.trim().toLowerCase();
-  if (filter.column === "taskId") {
-    return task.id.toLowerCase().includes(value) || task.id.replace("tsk_", "").toLowerCase().includes(value);
+  if (filter.taskId.trim()) {
+    const value = filter.taskId.trim().toLowerCase();
+    if (!task.id.toLowerCase().includes(value) && !task.id.replace("tsk_", "").toLowerCase().includes(value)) {
+      return false;
+    }
   }
-  if (filter.column === "taskName") {
-    return task.title.toLowerCase().includes(value);
+  if (filter.taskName.trim() && !task.title.toLowerCase().includes(filter.taskName.trim().toLowerCase())) {
+    return false;
   }
-  if (filter.column === "assigned") {
-    return value === "unassigned" ? !task.assigneeId : task.assigneeId === filter.value;
+  if (filter.assigneeIds.length > 0) {
+    const assigneeValue = task.assigneeId || "unassigned";
+    if (!filter.assigneeIds.includes(assigneeValue)) {
+      return false;
+    }
   }
-  if (filter.column === "due") {
-    return matchesDueFilter(task, filter.value);
+  if (filter.due.length > 0 && !filter.due.some((value) => matchesDueFilter(task, value))) {
+    return false;
   }
-  if (filter.column === "priority") {
-    return task.priority === filter.value;
+  if (filter.priorities.length > 0 && !filter.priorities.includes(task.priority)) {
+    return false;
   }
-  if (filter.column === "progress") {
-    return task.status === filter.value;
+  if (filter.statuses.length > 0 && !filter.statuses.includes(task.status)) {
+    return false;
   }
   return true;
 };
 
-const filterValueOptions = (column: TaskFilterColumn, users: User[]) => {
-  if (column === "assigned") {
-    return [
-      { value: "unassigned", label: "Unassigned" },
-      ...users.map((user) => ({ value: user.id, label: user.name })),
-    ];
-  }
-  if (column === "due") {
-    return dueFilterOptions;
-  }
-  if (column === "priority") {
-    return [
-      { value: "low", label: "Low" },
-      { value: "medium", label: "Medium" },
-      { value: "high", label: "High" },
-    ];
-  }
-  if (column === "progress") {
-    return [
-      { value: "todo", label: progressLabel.todo },
-      { value: "in_progress", label: progressLabel.in_progress },
-      { value: "done", label: progressLabel.done },
-    ];
-  }
-  return [];
-};
+const isFilterActive = (filter: TaskFilter) =>
+  filter.hideCompleted ||
+  Boolean(filter.taskId.trim()) ||
+  Boolean(filter.taskName.trim()) ||
+  filter.assigneeIds.length > 0 ||
+  filter.due.length > 0 ||
+  filter.priorities.length > 0 ||
+  filter.statuses.length > 0;
 
 const SectionShell = ({
   title,
@@ -170,7 +159,7 @@ const SectionShell = ({
   collapsed: boolean;
   onToggle: () => void;
 }) => (
-  <section className="border-b border-border last:border-b-0">
+  <section className="overflow-hidden rounded-xl border border-border bg-panel">
     <header className="flex min-h-12 items-center justify-between rounded-lg bg-panel-muted px-4">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <button
@@ -199,6 +188,7 @@ const SectionTabs = ({
   onFilter,
   filterActive,
   onSort,
+  sortLabel,
 }: {
   active: string;
   items: string[];
@@ -207,6 +197,7 @@ const SectionTabs = ({
   onFilter?: () => void;
   filterActive?: boolean;
   onSort?: () => void;
+  sortLabel?: string;
 }) => (
   <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border px-4">
     <nav className="flex items-center gap-6 text-[13px] font-medium text-soft">
@@ -238,7 +229,9 @@ const SectionTabs = ({
           </button>
         ) : null}
         {onSort ? (
-          <button type="button" className="hover:text-foreground" onClick={onSort}>Sort</button>
+          <button type="button" className="hover:text-foreground" onClick={onSort}>
+            {sortLabel ?? "Sort"}
+          </button>
         ) : null}
       </div>
     ) : null}
@@ -256,65 +249,108 @@ const TaskFilterPanel = ({
   onChange: (filter: TaskFilter) => void;
   onClear: () => void;
 }) => {
-  const options = filterValueOptions(filter.column, users);
-  const needsTextValue = filter.column === "taskId" || filter.column === "taskName";
-  const needsValue = filter.column !== "none";
+  const checkClassName = "h-4 w-4 rounded border-border text-accent focus:ring-accent/30";
+  const labelClassName = "flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-2 text-sm text-muted";
 
   return (
-    <div className="grid gap-3 border-b border-border bg-panel-muted px-4 py-3 md:grid-cols-[220px_1fr_auto]">
-      <label className="grid gap-1 text-xs font-medium text-muted">
-        Column
-        <Select
-          value={filter.column}
-          onChange={(event) => {
-            const column = event.target.value as TaskFilterColumn;
-            const nextOptions = filterValueOptions(column, users);
-            onChange({
-              column,
-              value: column === "none" ? "" : nextOptions[0]?.value ?? "",
-            });
-          }}
-        >
-          {taskFilterColumns.map((column) => (
-            <option key={column.value} value={column.value}>
-              {column.label}
-            </option>
-          ))}
-        </Select>
-      </label>
-
-      {needsValue ? (
+    <div className="grid gap-4 border-b border-border bg-panel-muted px-4 py-4">
+      <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-xs font-medium text-muted">
-          Value
-          {needsTextValue ? (
-            <input
-              value={filter.value}
-              onChange={(event) => onChange({ ...filter, value: event.target.value })}
-              placeholder={filter.column === "taskId" ? "Search task ID" : "Search task name"}
-              className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none placeholder:text-soft focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
-            />
-          ) : (
-            <Select
-              value={filter.value}
-              onChange={(event) => onChange({ ...filter, value: event.target.value })}
-            >
-              {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          )}
+          Task ID
+          <input
+            value={filter.taskId}
+            onChange={(event) => onChange({ ...filter, taskId: event.target.value })}
+            placeholder="Search task ID"
+            className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none placeholder:text-soft focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+          />
         </label>
-      ) : (
-        <p className="self-end rounded-xl border border-dashed border-border px-3 py-2 text-sm text-muted">
-          Choose a table column to filter tasks.
-        </p>
-      )}
+        <label className="grid gap-1 text-xs font-medium text-muted">
+          Task Name
+          <input
+            value={filter.taskName}
+            onChange={(event) => onChange({ ...filter, taskName: event.target.value })}
+            placeholder="Search task name"
+            className="h-10 rounded-xl border border-border bg-panel px-3 text-sm text-foreground outline-none placeholder:text-soft focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+          />
+        </label>
+      </div>
 
-      <Button variant="secondary" className="self-end" onClick={onClear}>
-        Clear
-      </Button>
+      <div className="grid gap-3 lg:grid-cols-4">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Progress</p>
+          <label className={labelClassName}>
+            <input
+              type="checkbox"
+              checked={filter.hideCompleted}
+              onChange={(event) => onChange({ ...filter, hideCompleted: event.target.checked })}
+              className={checkClassName}
+            />
+            Hide completed
+          </label>
+          {(["todo", "in_progress", "done"] as const).map((status) => (
+            <label key={status} className={labelClassName}>
+              <input
+                type="checkbox"
+                checked={filter.statuses.includes(status)}
+                onChange={() => onChange({ ...filter, statuses: toggleValue(filter.statuses, status) })}
+                className={checkClassName}
+              />
+              {progressLabel[status]}
+            </label>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Priority</p>
+          {(["low", "medium", "high"] as const).map((priority) => (
+            <label key={priority} className={labelClassName}>
+              <input
+                type="checkbox"
+                checked={filter.priorities.includes(priority)}
+                onChange={() => onChange({ ...filter, priorities: toggleValue(filter.priorities, priority) })}
+                className={checkClassName}
+              />
+              {priority}
+            </label>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Due</p>
+          {dueFilterOptions.map((option) => (
+            <label key={option.value} className={labelClassName}>
+              <input
+                type="checkbox"
+                checked={filter.due.includes(option.value)}
+                onChange={() => onChange({ ...filter, due: toggleValue(filter.due, option.value) })}
+                className={checkClassName}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Assigned</p>
+          {[{ id: "unassigned", name: "Unassigned" }, ...users].map((user) => (
+            <label key={user.id} className={labelClassName}>
+              <input
+                type="checkbox"
+                checked={filter.assigneeIds.includes(user.id)}
+                onChange={() => onChange({ ...filter, assigneeIds: toggleValue(filter.assigneeIds, user.id) })}
+                className={checkClassName}
+              />
+              {user.name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => onChange(defaultTaskFilter)}>
+          Reset default
+        </Button>
+        <Button variant="secondary" onClick={onClear}>
+          Show all
+        </Button>
+      </div>
     </div>
   );
 };
@@ -387,7 +423,20 @@ const TaskTable = ({
                   <span className="truncate">{assignee?.name ?? "Unassigned"}</span>
                 </div>
               </td>
-              <td className="px-3 py-3 text-muted">{formatShortDate(task.deadline)}</td>
+              <td className="px-3 py-3">
+                <span
+                  className={
+                    getDeadlineState(task) === "overdue"
+                      ? "font-medium text-rose-500"
+                      : getDeadlineState(task) === "soon"
+                        ? "font-medium text-amber-600 dark:text-amber-300"
+                        : "text-muted"
+                  }
+                >
+                  {getDeadlineState(task) === "soon" ? "🔥 " : ""}
+                  {formatTaskDeadline(task.deadline)}
+                </span>
+              </td>
               <td className="px-3 py-3">
                 <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium capitalize ring-1 ${priorityTone[task.priority]}`}>
                   {task.priority}
@@ -429,10 +478,11 @@ export default function DashboardPage() {
     loadComments,
     updateTaskStatus,
   } = useTasksStore();
-  const { projects } = useProjectsStore();
+  const { projects, isLoading: projectsLoading } = useProjectsStore();
   const currentUser = useCurrentUser();
   const permissions = useCurrentPermissions();
   const createTask = useCreateTask();
+  const editTask = useEditTask();
   const moveTask = useMoveTask();
   const addComment = useAddComment();
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -441,8 +491,8 @@ export default function DashboardPage() {
   const [projectSectionOpen, setProjectSectionOpen] = useState(true);
   const [taskTab, setTaskTab] = useState("All Tasks");
   const [taskFilterOpen, setTaskFilterOpen] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<TaskFilter>(emptyTaskFilter);
-  const [sortNewestFirst, setSortNewestFirst] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>(defaultTaskFilter);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("none");
   const [statusToast, setStatusToast] = useState<StatusToast>();
 
   useEffect(() => {
@@ -460,15 +510,32 @@ export default function DashboardPage() {
   const projectMembers = users.slice(0, 4);
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => taskMatchesFilter(task, taskFilter));
+    if (sortDirection === "none") {
+      return filtered;
+    }
     return [...filtered].sort((a, b) => {
-      if (sortNewestFirst) {
-        return b.updatedAt.localeCompare(a.updatedAt);
-      }
-      return a.status.localeCompare(b.status) || a.position - b.position;
+      const byName = a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+      return sortDirection === "asc" ? byName : -byName;
     });
-  }, [tasks, taskFilter, sortNewestFirst]);
+  }, [tasks, taskFilter, sortDirection]);
+
+  const toggleSortDirection = () => {
+    setSortDirection((direction) => {
+      if (direction === "none") {
+        return "asc";
+      }
+      if (direction === "asc") {
+        return "desc";
+      }
+      return "none";
+    });
+  };
 
   const openCreateTask = (status: TaskStatus = "todo") => {
+    if (projects.length === 0) {
+      showMessage("Create a workspace before adding tasks", "error");
+      return;
+    }
     setCreateTaskStatus(status);
     setCreateModalOpen(true);
   };
@@ -509,40 +576,28 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm text-muted">All tasks across every workspace.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center">
-              {projectMembers.map((user) => (
-                <Avatar
-                  key={user.id}
-                  name={user.name}
-                  src={user.avatarUrl}
-                  className="-ml-2 h-8 w-8 border-2 border-surface first:ml-0"
-                />
-              ))}
-            </div>
-            <Button
-              variant="secondary"
-              className="h-9 min-h-9 rounded-lg px-4 text-sm"
-              onClick={() => {
-                void navigator.clipboard?.writeText(window.location.href);
-                showMessage("Project link copied");
-              }}
-            >
-              Share
-            </Button>
+          <div className="flex items-center">
+            {projectMembers.map((user) => (
+              <Avatar
+                key={user.id}
+                name={user.name}
+                src={user.avatarUrl}
+                className="-ml-2 h-8 w-8 border-2 border-surface first:ml-0"
+              />
+            ))}
           </div>
         </header>
 
-        <div className="overflow-hidden rounded-xl border border-border bg-panel shadow-[0_12px_36px_rgb(15_23_42/0.04)] dark:shadow-none">
+        <div className="space-y-4">
           <SectionShell title="Task" collapsed={!taskSectionOpen} onToggle={() => setTaskSectionOpen((open) => !open)}>
             <SectionTabs
               active={taskTab}
               items={["All Tasks"]}
               onChange={setTaskTab}
-              onNew={openCreateTask}
               onFilter={() => setTaskFilterOpen((open) => !open)}
-              filterActive={taskFilterOpen || taskFilter.column !== "none"}
-              onSort={() => setSortNewestFirst((value) => !value)}
+              filterActive={taskFilterOpen || isFilterActive(taskFilter)}
+              onSort={toggleSortDirection}
+              sortLabel={sortDirection === "none" ? "Sort: Task name" : `Sort: Task name ${sortDirection.toUpperCase()}`}
             />
             {taskFilterOpen ? (
               <TaskFilterPanel
@@ -553,7 +608,17 @@ export default function DashboardPage() {
               />
             ) : null}
             {error ? <p className="px-4 py-4 text-sm text-rose-500">{error}</p> : null}
-            {isLoading ? (
+            {!isLoading && !projectsLoading && projects.length === 0 ? (
+              <div className="m-4 rounded-xl border border-dashed border-border bg-panel-muted px-4 py-8 text-center">
+                <h3 className="text-base font-semibold text-foreground">Create a workspace first</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+                  Tasks belong to workspaces. Create your first workspace, then you can add and track tasks here.
+                </p>
+                <Button className="mt-4" onClick={openCreateWorkspace}>
+                  Create workspace
+                </Button>
+              </div>
+            ) : isLoading ? (
               <BoardSkeleton />
             ) : (
               <TaskTable
@@ -575,7 +640,6 @@ export default function DashboardPage() {
               active="Kanban"
               items={["Kanban"]}
               onChange={() => undefined}
-              onNew={openCreateWorkspace}
             />
             <div className="p-4">
               {isLoading ? (
@@ -587,7 +651,6 @@ export default function DashboardPage() {
                   canEdit={permissions.canEditTask}
                   onOpenTask={selectTask}
                   onMoveTask={moveTask}
-                  onAddTask={openCreateTask}
                 />
               )}
             </div>
@@ -617,7 +680,11 @@ export default function DashboardPage() {
               comments={selectedComments}
               users={users}
               canComment={permissions.canComment}
+              canEdit={permissions.canEditTask}
               canDelete={permissions.canDeleteTask}
+              onUpdateTask={async (input) => {
+                await editTask(selectedTask.id, input);
+              }}
               onAddComment={async (body) => {
                 if (!currentUser) {
                   return;

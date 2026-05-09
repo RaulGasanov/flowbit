@@ -98,6 +98,8 @@ export const httpApiClient: ApiClient = {
     request("/workspaces", { method: "POST", body: JSON.stringify(input) }),
   updateProject: (id: ID, input: UpdateProjectInput) =>
     request(`/workspaces/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  shareProject: (id: ID) => request(`/workspaces/${id}/share`, { method: "POST" }),
+  getSharedWorkspace: (token: string) => request(`/shared/workspaces/${token}`),
 
   listUsers: () => request("/users"),
   updateUserProfile: (userId: ID, input: UpdateUserProfileInput) =>

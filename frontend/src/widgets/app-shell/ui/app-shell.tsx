@@ -13,7 +13,11 @@ import { useTasksStore } from "@/entities/task/model/store";
 import { useAuthStore } from "@/entities/auth/model/store";
 import { Modal } from "@/shared/ui/modal";
 
-export const AppShell = ({ children }: PropsWithChildren) => {
+interface AppShellProps extends PropsWithChildren {
+  showSearch?: boolean;
+}
+
+export const AppShell = ({ children, showSearch = false }: AppShellProps) => {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
@@ -77,7 +81,11 @@ export const AppShell = ({ children }: PropsWithChildren) => {
           <Sidebar projects={projects} onCreateWorkspace={() => setWorkspaceModalOpen(true)} />
         ) : null}
         <main className="min-h-screen min-w-0 flex-1 bg-surface md:h-full md:overflow-y-auto">
-          <Topbar onSearch={setQuery} onToggleSidebar={() => setSidebarOpen((open) => !open)} />
+          <Topbar
+            onSearch={setQuery}
+            onToggleSidebar={() => setSidebarOpen((open) => !open)}
+            showSearch={showSearch}
+          />
           <div className="px-4 py-5 md:px-8 md:py-7">{children}</div>
         </main>
       </div>

@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { getApiClient } from "@/shared/api/base";
 import { taskApi } from "@/entities/task/api/task-api";
-import type { CreateTaskInput } from "@/shared/api/model/contracts";
+import type { CreateTaskInput, UpdateTaskInput } from "@/shared/api/model/contracts";
 import type { Task, TaskComment, TaskStatus, User } from "@/shared/types/domain";
 
 const taskStatuses: TaskStatus[] = ["todo", "in_progress", "done"];
@@ -19,6 +19,7 @@ interface TasksState {
   loadTasks: (projectId?: string) => Promise<void>;
   loadUsers: () => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<void>;
+  updateTask: (taskId: string, input: UpdateTaskInput) => Promise<Task>;
   deleteTask: (taskId: string) => Promise<void>;
   setQuery: (query: string) => void;
   selectTask: (taskId?: string) => void;
@@ -74,10 +75,26 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         !get().query ||
         task.title.toLowerCase().includes(get().query.toLowerCase()) ||
         task.description.toLowerCase().includes(get().query.toLowerCase());
-      set({ tasks: shouldInsert ? [task, ...currentTasks] : currentTasks, error: undefined });
+      set({ tasks: shouldInsert ? [...currentTasks, task] : currentTasks, error: undefined });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create task";
       set({ error: message });
+      throw new Error(message);
+    }
+  },
+
+  updateTask: async (taskId, input) => {
+    const previousTasks = get().tasks;
+    try {
+      const updatedTask = await taskApi.update(taskId, input);
+      set({
+        tasks: get().tasks.map((task) => (task.id === taskId ? updatedTask : task)),
+        error: undefined,
+      });
+      return updatedTask;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update task";
+      set({ tasks: previousTasks, error: message });
       throw new Error(message);
     }
   },
@@ -174,7 +191,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       set({
         commentsByTaskId: {
           ...get().commentsByTaskId,
-          [taskId]: [...existing, comment],
+          [taskId]: [comment, ...existing],
         },
       });
     } catch (error) {

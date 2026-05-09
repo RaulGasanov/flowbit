@@ -1,5 +1,6 @@
 import { Badge } from "@/shared/ui/badge";
 import { Avatar } from "@/shared/ui/avatar";
+import { formatTaskDeadline, getDeadlineState } from "@/entities/task/lib/deadline";
 import type { Task, User } from "@/shared/types/domain";
 
 interface TaskCardProps {
@@ -45,14 +46,19 @@ export const TaskCard = ({ task, assignee, onOpen }: TaskCardProps) => (
       <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-muted">{task.description}</p>
     </div>
     <div className="mt-4 border-t border-border pt-3">
-      <div
-        className={
-          task.deadline && new Date(task.deadline) < new Date() && task.status !== "done"
-            ? "mb-3 text-xs font-medium text-rose-500"
-            : "mb-3 text-xs font-medium text-soft"
-        }
-      >
-        {task.deadline ? new Date(task.deadline).toLocaleDateString() : "No due date"}
+      <div className="mb-3 text-xs font-medium">
+        <span
+          className={
+            getDeadlineState(task) === "overdue"
+              ? "text-rose-500"
+              : getDeadlineState(task) === "soon"
+                ? "text-amber-600 dark:text-amber-300"
+                : "text-soft"
+          }
+        >
+          {getDeadlineState(task) === "soon" ? "🔥 " : ""}
+          {task.deadline ? formatTaskDeadline(task.deadline) : "No due date"}
+        </span>
       </div>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center">

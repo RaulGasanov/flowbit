@@ -17,6 +17,7 @@ import { useToggleTheme } from "@/features/toggle-theme/model/use-toggle-theme";
 interface TopbarProps {
   onSearch: (query: string) => void;
   onToggleSidebar: () => void;
+  showSearch?: boolean;
 }
 
 interface OpenTab {
@@ -59,7 +60,7 @@ const mergeTab = (tabs: OpenTab[], tab: OpenTab) => {
   return [...tabs, tab];
 };
 
-export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
+export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: TopbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const projects = useProjectsStore((state) => state.projects);
@@ -212,14 +213,16 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
        </div>
 
        <div className="relative ml-3 flex shrink-0 items-center gap-2">
-         <input
-            type="search"
-            id="task-search-input"
-            placeholder="Search"
-            className="hidden h-9 w-40 rounded-xl border border-border bg-panel-muted px-3 text-sm outline-none ring-accent/20 transition placeholder:text-soft focus:border-accent/50 focus:bg-panel focus:ring-2 xl:block"
-            onChange={(event) => onSearch(event.target.value)}
-            aria-label="Search tasks"
-         />
+         {showSearch ? (
+           <input
+              type="search"
+              id="task-search-input"
+              placeholder="Search"
+              className="hidden h-9 w-40 rounded-xl border border-border bg-panel-muted px-3 text-sm outline-none ring-accent/20 transition placeholder:text-soft focus:border-accent/50 focus:bg-panel focus:ring-2 xl:block"
+              onChange={(event) => onSearch(event.target.value)}
+              aria-label="Search tasks"
+           />
+         ) : null}
          <button
             type="button"
             className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-panel text-sm text-muted shadow-sm transition hover:bg-panel-muted hover:text-foreground"
@@ -227,7 +230,12 @@ export const Topbar = ({ onSearch, onToggleSidebar }: TopbarProps) => {
             aria-label="Open notifications"
             title={unreadCount(notifications) ? `${unreadCount(notifications)} unread notifications` : "Notifications"}
          >
-           💬
+           <span className="relative block h-4 w-4 rounded-md border-2 border-current">
+             <span className="absolute left-1/2 top-1/2 h-1.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-b-md border-b-2 border-current" />
+             {unreadCount(notifications) ? (
+               <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-panel" />
+             ) : null}
+           </span>
          </button>
          {isPanelOpen ? (
             <NotificationPanel

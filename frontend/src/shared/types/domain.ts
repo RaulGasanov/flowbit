@@ -2,7 +2,7 @@ export type ID = string;
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
-export type UserRole = "admin" | "editor" | "viewer";
+export type UserRole = "admin" | "editor" | "viewer" | "guest";
 export type ProjectVisibility = "private" | "team" | "public";
 export type NotificationType = "new_comment" | "task_updated" | "deadline_approaching";
 export type ThemePreference = "light" | "dark";
@@ -39,6 +39,7 @@ export interface Project {
   color: string;
   visibility: ProjectVisibility;
   memberIds: ID[];
+  shareToken?: string;
   createdAt: string;
 }
 
@@ -72,4 +73,10 @@ export interface Notification {
   message: string;
   createdAt: string;
   readAt?: string;
+}
+
+export interface SharedWorkspace {
+  project: Project;
+  tasks: Task[];
+  users: User[];
 }
