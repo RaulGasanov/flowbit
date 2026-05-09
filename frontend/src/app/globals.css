@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --page: 248 250 252;
+  --surface: 255 255 255;
+  --surface-muted: 248 250 252;
+  --sidebar: 248 250 252;
+  --panel: 255 255 255;
+  --panel-muted: 245 247 251;
+  --border: 226 232 240;
+  --foreground: 17 24 39;
+  --muted: 100 116 139;
+  --soft: 148 163 184;
+  --accent: 14 116 144;
+}
+
+.dark {
+  color-scheme: dark;
+  --page: 7 12 22;
+  --surface: 15 23 42;
+  --surface-muted: 21 32 54;
+  --sidebar: 12 19 34;
+  --panel: 15 23 42;
+  --panel-muted: 22 33 56;
+  --border: 45 57 81;
+  --foreground: 241 245 249;
+  --muted: 148 163 184;
+  --soft: 100 116 139;
+  --accent: 56 189 248;
+}
+
+* {
+  border-color: rgb(var(--border) / 1);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-page text-foreground antialiased;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.18);
+}
+
+@keyframes toast-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.toast-pop-in {
+  animation: toast-pop-in 220ms ease-out;
+}
