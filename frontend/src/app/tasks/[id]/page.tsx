@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { useCurrentUser } from "@/entities/user/model/store";
@@ -11,18 +10,9 @@ import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { taskApi } from "@/entities/task/api/task-api";
 import { userApi } from "@/entities/user/api/user-api";
 import { projectApi } from "@/entities/project/api/project-api";
+import { workspaceRoleFor } from "@/entities/project/lib/workspace-role";
 import { TaskDetails } from "@/entities/task/ui/task-details";
-import type { Project, Task, TaskComment, User, WorkspaceMemberRole } from "@/shared/types/domain";
-
-const workspaceRoleFor = (project?: Project, userId?: string): WorkspaceMemberRole | undefined => {
-  if (!project || !userId) {
-    return undefined;
-  }
-  if (project.ownerId === userId) {
-    return "owner";
-  }
-  return project.memberRoles?.[userId];
-};
+import type { Project, Task, TaskComment, User } from "@/shared/types/domain";
 
 export default function TaskPage() {
   const params = useParams<{ id: string }>();
@@ -68,7 +58,7 @@ export default function TaskPage() {
   }, [taskId]);
 
   return (
-    <AppShell>
+    <>
       <Card className="mx-auto max-w-3xl">
         <Link href="/">
           <Button variant="ghost" className="mb-4">
@@ -109,6 +99,6 @@ export default function TaskPage() {
           />
         ) : null}
       </Card>
-    </AppShell>
+    </>
   );
 }

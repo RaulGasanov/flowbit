@@ -16,25 +16,9 @@ import { useUpdateNotifications } from "@/features/update-notifications/model/us
 import { useToggleTheme } from "@/features/toggle-theme/model/use-toggle-theme";
 import { useUserStore } from "@/entities/user/model/store";
 import { useAuthStore } from "@/entities/auth/model/store";
-
-type SettingsTab = "profile" | "account" | "notifications" | "appearance";
-
-const tabs: Array<{ id: SettingsTab; label: string }> = [
-  { id: "profile", label: "Profile settings" },
-  { id: "account", label: "Account settings" },
-  { id: "notifications", label: "Notifications settings" },
-  { id: "appearance", label: "Appearance settings" },
-];
-
-const accentOptions: Array<{
-  value: User["settings"]["accentColor"];
-  label: string;
-  swatchClassName: string;
-}> = [
-  { value: "sky", label: "Sky", swatchClassName: "bg-sky-500" },
-  { value: "emerald", label: "Emerald", swatchClassName: "bg-emerald-500" },
-  { value: "rose", label: "Rose", swatchClassName: "bg-rose-500" },
-];
+import { SettingsNav } from "@/widgets/settings-form/ui/settings-nav";
+import { AppearanceSection } from "@/widgets/settings-form/ui/appearance-section";
+import type { SettingsTab } from "@/widgets/settings-form/model/settings-options";
 
 interface SettingsFormProps {
   user: User;
@@ -193,22 +177,7 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
       <Toast open={Boolean(toast)} tone={toast?.tone ?? "success"} message={toast?.message ?? ""} onClose={closeToast} />
 
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        <Card className="h-fit p-2">
-          <nav className="space-y-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${
-                  activeTab === tab.id ? "bg-surface-muted font-medium" : "text-foreground/70 hover:bg-surface-muted"
-                }`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </Card>
+        <SettingsNav activeTab={activeTab} onChange={setActiveTab} />
 
         <Card className="space-y-4">
           {activeTab === "profile" ? (
@@ -306,63 +275,15 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
         ) : null}
 
           {activeTab === "appearance" ? (
-            <section className="space-y-5">
-              <div>
-                <h2 className="text-lg font-semibold">Appearance settings</h2>
-                <p className="mt-1 text-sm text-muted">Theme and accent preferences for your workspace.</p>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Theme</p>
-                <div className="grid gap-2 rounded-2xl border border-border bg-surface-muted p-1.5 sm:grid-cols-2">
-                  {(["light", "dark"] as const).map((theme) => {
-                    const active = user.settings.theme === theme;
-                    return (
-                      <button
-                        key={theme}
-                        type="button"
-                        className={`min-h-12 rounded-xl px-4 text-sm font-semibold transition ${
-                          active
-                            ? "bg-accent text-white shadow-sm"
-                            : "text-muted hover:bg-panel hover:text-foreground"
-                        }`}
-                        onClick={() => {
-                          void saveTheme(theme);
-                        }}
-                      >
-                        {theme === "light" ? "Light mode" : "Dark mode"}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Accent color</p>
-                <div className="flex flex-wrap gap-2">
-                  {accentOptions.map((option) => {
-                    const active = user.settings.accentColor === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition ${
-                          active
-                            ? "border-accent bg-accent/10 text-foreground ring-2 ring-accent/15"
-                            : "border-border bg-surface-muted text-muted hover:bg-panel hover:text-foreground"
-                        }`}
-                        onClick={() => {
-                          void saveAccentColor(option.value);
-                        }}
-                      >
-                        <span className={`h-3 w-3 rounded-full ${option.swatchClassName}`} />
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
+            <AppearanceSection
+              settings={user.settings}
+              onSaveTheme={(theme) => {
+                void saveTheme(theme);
+              }}
+              onSaveAccentColor={(accentColor) => {
+                void saveAccentColor(accentColor);
+              }}
+            />
           ) : null}
         </Card>
       </div>

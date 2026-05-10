@@ -5,6 +5,8 @@ import type { FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
+import { formFieldFocusClassName } from "@/shared/lib/form-field";
+import { cn } from "@/shared/lib/cn";
 import type { TaskPriority, TaskStatus, User } from "@/shared/types/domain";
 
 interface TaskCreateFormProps {
@@ -96,7 +98,10 @@ export const TaskCreateForm = ({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="Add context, acceptance criteria, links"
-          className="min-h-28 w-full resize-none rounded-xl border border-border/70 bg-surface px-3 py-2.5 text-sm text-foreground outline-none ring-accent/40 transition placeholder:text-soft focus:border-accent/50 focus:ring-2 disabled:opacity-60"
+          className={cn(
+            "min-h-28 w-full resize-none rounded-xl border px-3 py-2.5 text-sm text-foreground",
+            formFieldFocusClassName,
+          )}
           disabled={disabled}
         />
       </label>
@@ -107,7 +112,6 @@ export const TaskCreateForm = ({
           <Select
             value={status}
             onChange={(event) => setStatus(event.target.value as TaskStatus)}
-            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="todo">To Do</option>
@@ -121,7 +125,6 @@ export const TaskCreateForm = ({
           <Select
             value={priority}
             onChange={(event) => setPriority(event.target.value as TaskPriority)}
-            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="low">Low</option>
@@ -137,7 +140,6 @@ export const TaskCreateForm = ({
           <Select
             value={assigneeId}
             onChange={(event) => setAssigneeId(event.target.value)}
-            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="">Unassigned</option>
@@ -170,7 +172,6 @@ export const TaskCreateForm = ({
               setSelectedProjectId(event.target.value);
               setWorkspaceError(undefined);
             }}
-            className="border-border/70 bg-surface"
             disabled={disabled}
           >
             <option value="">Choose workspace</option>

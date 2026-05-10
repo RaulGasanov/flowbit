@@ -4,6 +4,8 @@ import { Avatar } from "@/shared/ui/avatar";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
+import { cn } from "@/shared/lib/cn";
+import { formFieldFocusClassName } from "@/shared/lib/form-field";
 import { formatTaskDeadline, getDeadlineState } from "@/entities/task/lib/deadline";
 import type { Task, TaskComment, TaskPriority, TaskStatus, User } from "@/shared/types/domain";
 
@@ -197,7 +199,10 @@ export const TaskDetails = ({
                 value={editDescription}
                 onChange={(event) => setEditDescription(event.target.value)}
                 placeholder="Description"
-                className="min-h-14 w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-soft focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                className={cn(
+                  "min-h-14 w-full resize-none rounded-lg border px-3 py-2 text-sm text-foreground",
+                  formFieldFocusClassName,
+                )}
               />
 
               <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.2fr_1fr]">
@@ -314,7 +319,10 @@ export const TaskDetails = ({
               onChange={(event) => setCommentBody(event.target.value)}
               placeholder={canComment ? "Add a comment..." : "Viewer role cannot comment"}
               disabled={!canComment}
-              className="min-h-11 flex-1 rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm outline-none transition placeholder:text-soft focus:border-accent/50 focus:bg-panel focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60"
+              className={cn(
+                "min-h-11 flex-1 rounded-xl border bg-surface-muted px-3 py-2 text-sm focus:bg-panel",
+                formFieldFocusClassName,
+              )}
             />
             <Button
               variant="secondary"

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/shared/lib/cn";
 import { Avatar } from "@/shared/ui/avatar";
 import { useCurrentUser } from "@/entities/user/model/store";
+import { DASHBOARD_TAB } from "@/widgets/topbar/model/tabs";
 import type { Project } from "@/shared/types/domain";
 
 interface SidebarProps {
@@ -15,9 +16,9 @@ interface SidebarProps {
 
 const navLinkClass = (active: boolean) =>
   cn(
-    "group flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-muted transition",
-    "hover:bg-panel-muted hover:text-foreground",
-    active && "bg-panel text-foreground shadow-sm ring-1 ring-border",
+    "group flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[13px] font-semibold text-muted transition",
+    "hover:border-border hover:bg-panel-muted hover:text-foreground",
+    active && "border-border bg-panel text-foreground shadow-sm",
   );
 
 export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProps) => {
@@ -57,7 +58,7 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
               href="/"
               className={navLinkClass(pathname === "/")}
               onClick={() => {
-                openTopbarTab({ id: "dashboard", label: "Dashboard", href: "/" });
+                openTopbarTab(DASHBOARD_TAB);
                 onNavigate?.();
               }}
             >
@@ -102,7 +103,7 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
               href="/"
               className={navLinkClass(pathname === "/")}
               onClick={() => {
-                openTopbarTab({ id: "dashboard", label: "All tasks", href: "/" });
+                openTopbarTab(DASHBOARD_TAB);
                 onNavigate?.();
               }}
             >

@@ -2,6 +2,7 @@
 
 import type { SelectHTMLAttributes } from "react";
 import { cn } from "@/shared/lib/cn";
+import { formFieldFocusClassName } from "@/shared/lib/form-field";
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   wrapperClassName?: string;
@@ -11,8 +12,8 @@ export const Select = ({ className, wrapperClassName, children, ...props }: Sele
   <span className={cn("relative block", wrapperClassName)}>
     <select
       className={cn(
-        "h-10 w-full appearance-none rounded-xl border border-border bg-panel px-3 pr-9 text-sm text-foreground outline-none transition",
-        "focus:border-accent/50 focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60",
+        "h-10 w-full appearance-none rounded-xl border bg-surface px-3 pr-9 text-sm text-foreground",
+        formFieldFocusClassName,
         className,
       )}
       {...props}

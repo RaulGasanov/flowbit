@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
-import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { useCurrentUser } from "@/entities/user/model/store";
@@ -46,16 +45,14 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <AppShell>
-        <Card>
-          <p className="text-sm text-foreground/70">No active user profile.</p>
-        </Card>
-      </AppShell>
+      <Card>
+        <p className="text-sm text-foreground/70">No active user profile.</p>
+      </Card>
     );
   }
 
   return (
-    <AppShell>
+    <>
       <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
         <ProfileCard user={user} />
 
@@ -132,6 +129,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
