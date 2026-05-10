@@ -4,6 +4,8 @@ import { Avatar } from "@/shared/ui/avatar";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
 import { formFieldFocusClassName } from "@/shared/lib/form-field";
+import { toRoutePath } from "@/shared/lib/navigation-path";
+import { useNavigationLoadingStore } from "@/shared/model/navigation-loading";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { useAuthStore } from "@/entities/auth/model/store";
 import { useProjectsStore } from "@/entities/project/model/store";
@@ -30,6 +32,7 @@ export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: Topbar
     isPanelOpen,
   } = useNotificationsStore();
   const { setPanelOpen, markAsRead, markAllAsRead } = useNotificationActions();
+  const pendingHref = useNavigationLoadingStore((state) => state.pendingHref);
   const { currentTab, displayedTabs, closeTab, openTab } = useOpenTabs({
     currentUserId: currentUser?.id,
     projects,
@@ -59,13 +62,15 @@ export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: Topbar
          <nav className="hidden min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-panel-muted p-1 md:flex">
            {displayedTabs.map((item) => {
              const active = currentTab?.id === item.id;
+             const pending = toRoutePath(pendingHref) === toRoutePath(item.href);
              return (
                 <div
                    key={item.id}
                    className={cn(
-                      "flex h-9 max-w-56 shrink-0 items-center rounded-lg text-[13px] font-semibold text-muted transition",
+                      "relative flex h-9 max-w-56 shrink-0 items-center overflow-hidden rounded-lg text-[13px] font-semibold text-muted transition",
                       "hover:bg-panel hover:text-foreground",
                       active && "bg-panel text-foreground shadow-sm",
+                      pending && "bg-panel text-foreground",
                    )}
                 >
                   <button

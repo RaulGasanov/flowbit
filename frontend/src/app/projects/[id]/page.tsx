@@ -7,6 +7,7 @@ import { Card } from "@/shared/ui/card";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Toast } from "@/shared/ui/toast";
+import { LoadingSpinner } from "@/shared/ui/loading-spinner";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { useProjectsStore } from "@/entities/project/model/store";
@@ -90,6 +91,14 @@ export default function ProjectBoardPage() {
         message={statusToast?.message ?? ""}
         onClose={() => setStatusToast(undefined)}
       />
+      {projectsLoading && !project ? (
+        <Card className="mb-5">
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <LoadingSpinner className="h-4 w-4 text-accent" />
+            Loading workspace...
+          </div>
+        </Card>
+      ) : null}
       {!projectsLoading && !project ? (
         <Card className="mb-5">
           <div className="space-y-3">

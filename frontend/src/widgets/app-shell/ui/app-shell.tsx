@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { PropsWithChildren } from "react";
 import { Sidebar } from "@/widgets/sidebar/ui/sidebar";
 import { Topbar } from "@/widgets/topbar/ui/topbar";
@@ -12,6 +12,9 @@ import { useProjectsStore } from "@/entities/project/model/store";
 import { useTasksStore } from "@/entities/task/model/store";
 import { useAuthStore } from "@/entities/auth/model/store";
 import { Modal } from "@/shared/ui/modal";
+import { RouteLoadingIndicator } from "@/shared/ui/route-loading-indicator";
+import { toRoutePath, routePathMatches } from "@/shared/lib/navigation-path";
+import { useNavigationLoadingStore } from "@/shared/model/navigation-loading";
 
 interface AppShellProps extends PropsWithChildren {
   showSearch?: boolean;
@@ -19,9 +22,11 @@ interface AppShellProps extends PropsWithChildren {
 
 export const AppShell = ({ children, showSearch = false }: AppShellProps) => {
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+  const { pendingHref, beginNavigation, endNavigation } = useNavigationLoadingStore();
   const { token, isReady } = useAuthStore();
   const { projects, loadProjects, createProject } = useProjectsStore();
   const { loadUsers, currentUserId } = useUserStore();
@@ -68,6 +73,49 @@ export const AppShell = ({ children, showSearch = false }: AppShellProps) => {
   }, []);
 
   useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target instanceof Element ? event.target : undefined;
+      const anchor = target?.closest<HTMLAnchorElement>("a[href]");
+      const targetMode = anchor?.getAttribute("target");
+      const href = anchor?.getAttribute("href");
+      const nextPath = toRoutePath(href);
+      if (!anchor || !nextPath || (targetMode && targetMode !== "_self") || nextPath === pathname) {
+        return;
+      }
+
+      beginNavigation(nextPath);
+    };
+
+    document.addEventListener("click", onDocumentClick, true);
+    return () => document.removeEventListener("click", onDocumentClick, true);
+  }, [beginNavigation, pathname]);
+
+  useEffect(() => {
+    if (pendingHref && routePathMatches(pendingHref, pathname)) {
+      endNavigation();
+    }
+  }, [endNavigation, pathname, pendingHref]);
+
+  useEffect(() => {
+    if (!pendingHref) {
+      return;
+    }
+    const timeout = window.setTimeout(endNavigation, 12000);
+    return () => window.clearTimeout(timeout);
+  }, [endNavigation, pendingHref]);
+
+  useEffect(() => {
     const media = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
       setIsDesktop(media.matches);
@@ -88,6 +136,7 @@ export const AppShell = ({ children, showSearch = false }: AppShellProps) => {
 
   return (
     <div className="min-h-screen bg-page text-foreground md:h-screen md:overflow-hidden">
+      <RouteLoadingIndicator active={Boolean(pendingHref)} />
       <div className="min-h-screen md:flex md:h-full">
         <button
           type="button"
@@ -128,6 +177,7 @@ export const AppShell = ({ children, showSearch = false }: AppShellProps) => {
           onCreate={async (input) => {
             const project = await createProject(input);
             setWorkspaceModalOpen(false);
+            beginNavigation(`/projects/${project.id}`);
             router.push(`/projects/${project.id}`);
           }}
         />

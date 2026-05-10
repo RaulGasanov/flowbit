@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
+import { LoadingSpinner } from "@/shared/ui/loading-spinner";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { taskApi } from "@/entities/task/api/task-api";
@@ -65,7 +66,12 @@ export default function TaskPage() {
             Back to dashboard
           </Button>
         </Link>
-        {isLoading ? <p className="text-sm text-foreground/70">Loading task...</p> : null}
+        {isLoading ? (
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-muted p-4 text-sm text-muted">
+            <LoadingSpinner className="h-4 w-4 text-accent" />
+            Loading task...
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-rose-500">{error}</p> : null}
         {!isLoading && !task ? <p className="text-sm text-foreground/70">Task not found.</p> : null}
         {task ? (

@@ -1,5 +1,8 @@
+/*noinspection CssInvalidAtRule*/
 @tailwind base;
+/*noinspection CssInvalidAtRule*/
 @tailwind components;
+/*noinspection CssInvalidAtRule*/
 @tailwind utilities;
 
 :root {
@@ -42,7 +45,10 @@ body {
 }
 
 body {
-  @apply bg-page text-foreground antialiased;
+  background-color: rgb(var(--page) / 1);
+  color: rgb(var(--foreground) / 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -63,4 +69,23 @@ body {
 
 .toast-pop-in {
   animation: toast-pop-in 220ms ease-out;
+}
+
+@keyframes route-progress {
+  0% {
+    transform: translateX(-110%) scaleX(0.55);
+  }
+
+  55% {
+    transform: translateX(70%) scaleX(0.85);
+  }
+
+  100% {
+    transform: translateX(210%) scaleX(0.55);
+  }
+}
+
+.route-progress-bar {
+  animation: route-progress 1.15s ease-in-out infinite;
+  transform-origin: left center;
 }

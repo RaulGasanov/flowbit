@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/shared/lib/cn";
+import { routePathMatches, toRoutePath } from "@/shared/lib/navigation-path";
+import { useNavigationLoadingStore } from "@/shared/model/navigation-loading";
 import { Avatar } from "@/shared/ui/avatar";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { DASHBOARD_TAB } from "@/widgets/topbar/model/tabs";
@@ -14,23 +16,35 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-const navLinkClass = (active: boolean) =>
+const navLinkClass = (active: boolean, pending = false) =>
   cn(
-    "group flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[13px] font-semibold text-muted transition",
+    "group relative flex items-center justify-between gap-3 overflow-hidden rounded-xl border border-transparent px-3 py-2.5 text-[13px] font-semibold text-muted transition",
     "hover:border-border hover:bg-panel-muted hover:text-foreground",
     active && "border-border bg-panel text-foreground shadow-sm",
+    pending && "border-border bg-panel-muted text-foreground",
   );
 
 export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProps) => {
   const pathname = usePathname();
   const currentUser = useCurrentUser();
+  const pendingHref = useNavigationLoadingStore((state) => state.pendingHref);
+  const beginNavigation = useNavigationLoadingStore((state) => state.beginNavigation);
   const openTopbarTab = (tab: { id: string; label: string; href: string }) => {
     window.dispatchEvent(new CustomEvent("flowbit:open-tab", { detail: tab }));
+  };
+  const isPendingHref = (href: string) =>
+    Boolean(pendingHref && toRoutePath(pendingHref) === toRoutePath(href) && !routePathMatches(href, pathname));
+  const handleNavigation = (href: string, tab: { id: string; label: string; href: string }) => {
+    if (!routePathMatches(href, pathname)) {
+      beginNavigation(href);
+    }
+    openTopbarTab(tab);
+    onNavigate?.();
   };
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-r border-border bg-sidebar px-5 py-5">
-      <Link href="/" className="mb-6 flex items-center gap-3 px-1" onClick={onNavigate}>
+      <Link href="/" className="mb-6 flex items-center gap-3 px-1" onClick={() => handleNavigation("/", DASHBOARD_TAB)}>
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-foreground text-sm font-bold text-surface">
           F
         </span>
@@ -56,11 +70,8 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
           <div className="space-y-1">
             <Link
               href="/"
-              className={navLinkClass(pathname === "/")}
-              onClick={() => {
-                openTopbarTab(DASHBOARD_TAB);
-                onNavigate?.();
-              }}
+              className={navLinkClass(pathname === "/", isPendingHref("/"))}
+              onClick={() => handleNavigation("/", DASHBOARD_TAB)}
             >
               <span className="flex items-center gap-3">
                 <span className="grid h-5 w-5 place-items-center text-base text-muted">⌂</span>
@@ -69,11 +80,8 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
             </Link>
             <Link
               href="/profile"
-              className={navLinkClass(pathname === "/profile")}
-              onClick={() => {
-                openTopbarTab({ id: "profile", label: "Profile", href: "/profile" });
-                onNavigate?.();
-              }}
+              className={navLinkClass(pathname === "/profile", isPendingHref("/profile"))}
+              onClick={() => handleNavigation("/profile", { id: "profile", label: "Profile", href: "/profile" })}
             >
               <span className="flex items-center gap-3">
                 <span className="grid h-5 w-5 place-items-center text-base text-muted">▱</span>
@@ -101,11 +109,8 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
           <div className="space-y-1">
             <Link
               href="/"
-              className={navLinkClass(pathname === "/")}
-              onClick={() => {
-                openTopbarTab(DASHBOARD_TAB);
-                onNavigate?.();
-              }}
+              className={navLinkClass(pathname === "/", isPendingHref("/"))}
+              onClick={() => handleNavigation("/", DASHBOARD_TAB)}
             >
               <span className="flex items-center gap-3">
                 <span className="h-3 w-3 rounded-full border-2 border-blue-500" />
@@ -116,14 +121,16 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
               <Link
                 key={`workspace-${project.id}`}
                 href={`/projects/${project.id}`}
-                className={navLinkClass(pathname === `/projects/${project.id}`)}
+                className={navLinkClass(
+                  pathname === `/projects/${project.id}`,
+                  isPendingHref(`/projects/${project.id}`),
+                )}
                 onClick={() => {
-                  openTopbarTab({
+                  handleNavigation(`/projects/${project.id}`, {
                     id: `project:${project.id}`,
                     label: project.name,
                     href: `/projects/${project.id}`,
                   });
-                  onNavigate?.();
                 }}
               >
                 <span className="flex min-w-0 items-center gap-3">
@@ -141,11 +148,8 @@ export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProp
         <div className="space-y-1">
           <Link
             href="/settings"
-            className={navLinkClass(pathname === "/settings")}
-            onClick={() => {
-              openTopbarTab({ id: "settings", label: "Preferences", href: "/settings" });
-              onNavigate?.();
-            }}
+            className={navLinkClass(pathname === "/settings", isPendingHref("/settings"))}
+            onClick={() => handleNavigation("/settings", { id: "settings", label: "Preferences", href: "/settings" })}
           >
             <span className="flex items-center gap-3">
               <span className="grid h-5 w-5 place-items-center text-base text-muted">⚙</span>

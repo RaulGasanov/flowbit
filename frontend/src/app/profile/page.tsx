@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
+import { LoadingSpinner } from "@/shared/ui/loading-spinner";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { useTasksStore } from "@/entities/task/model/store";
 import { useNotificationsStore } from "@/entities/notification/model/store";
@@ -11,7 +12,7 @@ import { ProfileCard } from "@/widgets/profile-card/ui/profile-card";
 
 export default function ProfilePage() {
   const user = useCurrentUser();
-  const { tasks, commentsByTaskId, loadTasks, loadComments } = useTasksStore();
+  const { tasks, commentsByTaskId, isLoading, loadTasks, loadComments } = useTasksStore();
   const notifications = useNotificationsStore((state) => state.notifications);
 
   useEffect(() => {
@@ -65,7 +66,12 @@ export default function ProfilePage() {
               </Link>
             </div>
             <div className="space-y-2">
-              {assignedTasks.length ? (
+              {isLoading ? (
+                <div className="flex items-center gap-2 rounded-md border border-border bg-surface-muted p-3 text-sm text-muted">
+                  <LoadingSpinner className="h-4 w-4 text-accent" />
+                  Loading assigned tasks...
+                </div>
+              ) : assignedTasks.length ? (
                 assignedTasks.map((task) => (
                   <Link
                     href={`/tasks/${task.id}`}
@@ -88,7 +94,12 @@ export default function ProfilePage() {
             <Card>
               <h3 className="mb-2 text-base font-semibold">Recent tasks</h3>
               <div className="space-y-2">
-                {recentTasks.map((task) => (
+                {isLoading ? (
+                  <div className="flex items-center gap-2 rounded-md bg-surface-muted p-2 text-sm text-muted">
+                    <LoadingSpinner className="h-4 w-4 text-accent" />
+                    Loading...
+                  </div>
+                ) : recentTasks.map((task) => (
                   <div key={task.id} className="rounded-md bg-surface-muted p-2">
                     <p className="text-sm font-medium">{task.title}</p>
                     <p className="text-xs text-foreground/70">

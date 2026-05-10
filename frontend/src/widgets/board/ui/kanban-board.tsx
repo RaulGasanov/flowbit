@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/shared/lib/cn";
+import { LoadingSpinner } from "@/shared/ui/loading-spinner";
 import { TaskCard } from "@/entities/task/ui/task-card";
 import type { Task, TaskStatus, User } from "@/shared/types/domain";
 
@@ -160,33 +161,45 @@ export const KanbanBoard = ({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-      <div className="sticky top-16 z-10 mb-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface/95 p-1 shadow-sm backdrop-blur lg:hidden">
-        {columns.map((column) => {
-          const active = activeMobileColumn === column.key;
-          return (
-            <button
-              key={`mobile-${column.key}`}
-              type="button"
-              className={cn(
-                "flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted transition",
-                active && "bg-panel text-foreground shadow-sm",
-              )}
-              onClick={() => setActiveMobileColumn(column.key)}
-            >
-              <span className="truncate">{column.label}</span>
-              <span
+      <div className="sticky top-16 z-10 mb-3 space-y-2 lg:hidden">
+        {isLoading ? (
+          <div
+            className="flex items-center gap-2 rounded-xl border border-border bg-surface/95 px-3 py-2 text-xs font-semibold text-muted shadow-sm backdrop-blur"
+            role="status"
+            aria-live="polite"
+          >
+            <LoadingSpinner className="h-3.5 w-3.5 text-accent" />
+            Loading tasks...
+          </div>
+        ) : null}
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
+          {columns.map((column) => {
+            const active = activeMobileColumn === column.key;
+            return (
+              <button
+                key={`mobile-${column.key}`}
+                type="button"
                 className={cn(
-                  "grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-semibold text-white",
-                  column.key === "todo" && "bg-violet-500",
-                  column.key === "in_progress" && "bg-blue-500",
-                  column.key === "done" && "bg-emerald-500",
+                  "flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted transition",
+                  active && "bg-panel text-foreground shadow-sm",
+                )}
+                onClick={() => setActiveMobileColumn(column.key)}
+              >
+                <span className="truncate">{column.label}</span>
+                <span
+                  className={cn(
+                    "grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-semibold text-white",
+                    column.key === "todo" && "bg-violet-500",
+                    column.key === "in_progress" && "bg-blue-500",
+                    column.key === "done" && "bg-emerald-500",
                 )}
               >
-                {isLoading ? "…" : tasksByStatus[column.key].length}
-              </span>
-            </button>
-          );
-        })}
+                  {tasksByStatus[column.key].length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {columns.map((column) => (

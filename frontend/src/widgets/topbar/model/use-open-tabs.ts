@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Project } from "@/shared/types/domain";
+import { routePathMatches } from "@/shared/lib/navigation-path";
+import { useNavigationLoadingStore } from "@/shared/model/navigation-loading";
 import { DASHBOARD_TAB, mergeTab, readStoredTabs, TABS_STORAGE_PREFIX, writeStoredTabs } from "@/widgets/topbar/model/tabs";
 import type { OpenTab } from "@/widgets/topbar/model/tabs";
 
@@ -15,6 +17,7 @@ interface UseOpenTabsInput {
 export const useOpenTabs = ({ currentUserId, projects, projectsLoading }: UseOpenTabsInput) => {
   const router = useRouter();
   const pathname = usePathname();
+  const beginNavigation = useNavigationLoadingStore((state) => state.beginNavigation);
   const storageKey = `${TABS_STORAGE_PREFIX}:${currentUserId ?? "guest"}`;
 
   const currentTab = useMemo<OpenTab | null>(() => {
@@ -109,11 +112,17 @@ export const useOpenTabs = ({ currentUserId, projects, projectsLoading }: UseOpe
     writeStoredTabs(storageKey, nextTabs);
     if (currentTab?.id === tab.id) {
       const fallback = nextTabs[Math.max(0, closedIndex - 1)] ?? nextTabs[0];
+      if (!routePathMatches(fallback.href, pathname)) {
+        beginNavigation(fallback.href);
+      }
       router.push(fallback.href);
     }
   };
 
   const openTab = (tab: OpenTab) => {
+    if (!routePathMatches(tab.href, pathname)) {
+      beginNavigation(tab.href);
+    }
     router.push(tab.href);
   };
 
