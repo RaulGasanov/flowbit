@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 import {
   closestCorners,
@@ -108,6 +109,7 @@ export const KanbanBoard = ({
   onOpenTask,
   onMoveTask,
 }: KanbanBoardProps) => {
+  const [activeMobileColumn, setActiveMobileColumn] = useState<TaskStatus>("todo");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -158,11 +160,42 @@ export const KanbanBoard = ({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <div className="sticky top-16 z-10 mb-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface/95 p-1 shadow-sm backdrop-blur lg:hidden">
+        {columns.map((column) => {
+          const active = activeMobileColumn === column.key;
+          return (
+            <button
+              key={`mobile-${column.key}`}
+              type="button"
+              className={cn(
+                "flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted transition",
+                active && "bg-panel text-foreground shadow-sm",
+              )}
+              onClick={() => setActiveMobileColumn(column.key)}
+            >
+              <span className="truncate">{column.label}</span>
+              <span
+                className={cn(
+                  "grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[10px] font-semibold text-white",
+                  column.key === "todo" && "bg-violet-500",
+                  column.key === "in_progress" && "bg-blue-500",
+                  column.key === "done" && "bg-emerald-500",
+                )}
+              >
+                {isLoading ? "…" : tasksByStatus[column.key].length}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {columns.map((column) => (
           <section
             key={column.key}
-            className="min-w-0 rounded-lg border border-border bg-panel"
+            className={cn(
+              "min-w-0 rounded-lg border border-border bg-panel",
+              activeMobileColumn === column.key ? "block" : "hidden lg:block",
+            )}
             aria-label={column.label}
             aria-busy={isLoading}
           >
