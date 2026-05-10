@@ -36,14 +36,14 @@ export const Modal = ({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center sm:p-4">
       <div
         className={cn(
-          "w-full max-w-xl rounded-2xl border border-border/70 bg-surface p-5 shadow-2xl shadow-slate-950/15",
+          "flex max-h-[92dvh] w-full max-w-xl flex-col rounded-2xl border border-border/70 bg-surface p-4 shadow-2xl shadow-slate-950/15 sm:max-h-[88vh] sm:p-5",
           className,
         )}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-3 flex shrink-0 items-start justify-between gap-4 sm:mb-4">
           <h3 className="min-w-0 text-lg font-semibold leading-tight">{title}</h3>
           <button
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xl leading-none text-muted transition hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
@@ -54,7 +54,7 @@ export const Modal = ({
             ×
           </button>
         </div>
-        {children}
+        <div className="min-h-0 overflow-y-auto overscroll-contain pr-1">{children}</div>
       </div>
     </div>
   );

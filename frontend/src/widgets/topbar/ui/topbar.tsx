@@ -175,7 +175,12 @@ export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: Topbar
             title="Toggle sidebar"
             onClick={onToggleSidebar}
          >
-           <span className="relative block h-4 w-4 rounded-[4px] border-2 border-current">
+           <span className="flex h-4 w-4 flex-col justify-center gap-1 md:hidden">
+             <span className="h-0.5 rounded-full bg-current" />
+             <span className="h-0.5 rounded-full bg-current" />
+             <span className="h-0.5 rounded-full bg-current" />
+           </span>
+           <span className="relative hidden h-4 w-4 rounded-[4px] border-2 border-current md:block">
              <span className="absolute bottom-0 left-1 top-0 w-0 border-l-2 border-current" />
            </span>
          </button>

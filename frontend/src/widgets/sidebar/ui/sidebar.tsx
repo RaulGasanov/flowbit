@@ -10,6 +10,7 @@ import type { Project } from "@/shared/types/domain";
 interface SidebarProps {
   projects: Project[];
   onCreateWorkspace: () => void;
+  onNavigate?: () => void;
 }
 
 const navLinkClass = (active: boolean) =>
@@ -19,7 +20,7 @@ const navLinkClass = (active: boolean) =>
     active && "bg-panel text-foreground shadow-sm ring-1 ring-border",
   );
 
-export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
+export const Sidebar = ({ projects, onCreateWorkspace, onNavigate }: SidebarProps) => {
   const pathname = usePathname();
   const currentUser = useCurrentUser();
   const openTopbarTab = (tab: { id: string; label: string; href: string }) => {
@@ -27,8 +28,8 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
   };
 
   return (
-    <aside className="flex w-full flex-col border-b border-border bg-sidebar px-5 py-5 md:h-full md:w-[260px] md:shrink-0 md:overflow-hidden md:border-b-0 md:border-r">
-      <Link href="/" className="mb-6 flex items-center gap-3 px-1">
+    <aside className="flex h-full w-full flex-col overflow-hidden border-r border-border bg-sidebar px-5 py-5">
+      <Link href="/" className="mb-6 flex items-center gap-3 px-1" onClick={onNavigate}>
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-foreground text-sm font-bold text-surface">
           F
         </span>
@@ -49,13 +50,16 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-5">
+      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
         <section>
           <div className="space-y-1">
             <Link
               href="/"
               className={navLinkClass(pathname === "/")}
-              onClick={() => openTopbarTab({ id: "dashboard", label: "Dashboard", href: "/" })}
+              onClick={() => {
+                openTopbarTab({ id: "dashboard", label: "Dashboard", href: "/" });
+                onNavigate?.();
+              }}
             >
               <span className="flex items-center gap-3">
                 <span className="grid h-5 w-5 place-items-center text-base text-muted">⌂</span>
@@ -65,7 +69,10 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
             <Link
               href="/profile"
               className={navLinkClass(pathname === "/profile")}
-              onClick={() => openTopbarTab({ id: "profile", label: "Profile", href: "/profile" })}
+              onClick={() => {
+                openTopbarTab({ id: "profile", label: "Profile", href: "/profile" });
+                onNavigate?.();
+              }}
             >
               <span className="flex items-center gap-3">
                 <span className="grid h-5 w-5 place-items-center text-base text-muted">▱</span>
@@ -82,7 +89,10 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
               type="button"
               className="grid h-6 w-6 place-items-center rounded-md text-base text-soft hover:bg-panel hover:text-foreground"
               aria-label="Create workspace"
-              onClick={onCreateWorkspace}
+              onClick={() => {
+                onCreateWorkspace();
+                onNavigate?.();
+              }}
             >
               +
             </button>
@@ -91,7 +101,10 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
             <Link
               href="/"
               className={navLinkClass(pathname === "/")}
-              onClick={() => openTopbarTab({ id: "dashboard", label: "All tasks", href: "/" })}
+              onClick={() => {
+                openTopbarTab({ id: "dashboard", label: "All tasks", href: "/" });
+                onNavigate?.();
+              }}
             >
               <span className="flex items-center gap-3">
                 <span className="h-3 w-3 rounded-full border-2 border-blue-500" />
@@ -103,13 +116,14 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
                 key={`workspace-${project.id}`}
                 href={`/projects/${project.id}`}
                 className={navLinkClass(pathname === `/projects/${project.id}`)}
-                onClick={() =>
+                onClick={() => {
                   openTopbarTab({
                     id: `project:${project.id}`,
                     label: project.name,
                     href: `/projects/${project.id}`,
-                  })
-                }
+                  });
+                  onNavigate?.();
+                }}
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span className="h-3 w-3 shrink-0 rounded-full border-2" style={{ borderColor: project.color }} />
@@ -127,7 +141,10 @@ export const Sidebar = ({ projects, onCreateWorkspace }: SidebarProps) => {
           <Link
             href="/settings"
             className={navLinkClass(pathname === "/settings")}
-            onClick={() => openTopbarTab({ id: "settings", label: "Preferences", href: "/settings" })}
+            onClick={() => {
+              openTopbarTab({ id: "settings", label: "Preferences", href: "/settings" });
+              onNavigate?.();
+            }}
           >
             <span className="flex items-center gap-3">
               <span className="grid h-5 w-5 place-items-center text-base text-muted">⚙</span>
