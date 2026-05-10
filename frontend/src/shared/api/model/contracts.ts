@@ -68,9 +68,12 @@ export interface UpdateUserProfileInput {
   bio?: string;
 }
 
+export type WorkspaceMemberRole = "viewer" | "editor";
+
 export interface UpdateUserRoleInput {
+  projectId: ID;
   email: string;
-  role: UserRole;
+  role: WorkspaceMemberRole;
 }
 
 export interface UpdateUserSettingsInput {

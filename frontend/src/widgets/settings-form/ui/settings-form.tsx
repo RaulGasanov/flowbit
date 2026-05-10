@@ -9,7 +9,7 @@ import { Switch } from "@/shared/ui/switch";
 import { Avatar } from "@/shared/ui/avatar";
 import { Toast } from "@/shared/ui/toast";
 import { Select } from "@/shared/ui/select";
-import type { User, UserRole } from "@/shared/types/domain";
+import type { User } from "@/shared/types/domain";
 import { useUpdateProfile } from "@/features/update-profile/model/use-update-profile";
 import { useUploadAvatar } from "@/features/upload-avatar/model/use-upload-avatar";
 import { useChangePassword } from "@/features/change-password/model/use-change-password";
@@ -46,8 +46,6 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [bio, setBio] = useState(user.bio);
-  const [roleEmail, setRoleEmail] = useState("");
-  const [targetRole, setTargetRole] = useState<UserRole>("viewer");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,7 +62,6 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
   const updateNotifications = useUpdateNotifications();
   const toggleTheme = useToggleTheme();
   const updateSettings = useUserStore((state) => state.updateSettings);
-  const updateUserRoleByEmail = useUserStore((state) => state.updateUserRoleByEmail);
   const deleteCurrentAccount = useUserStore((state) => state.deleteCurrentAccount);
   const logout = useAuthStore((state) => state.logout);
 
@@ -140,33 +137,6 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
       setSuccess("Saved successfully");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save profile");
-    } finally {
-      setLoading(undefined);
-    }
-  };
-
-  const onSaveRoleByEmail = async () => {
-    setError(undefined);
-    setSuccess(undefined);
-    if (user.role !== "admin") {
-      setError("Only admin can update roles");
-      return;
-    }
-    if (!/\S+@\S+\.\S+/.test(roleEmail.trim())) {
-      setError("Enter a valid user email");
-      return;
-    }
-    if (roleEmail.trim().toLowerCase() === user.email.toLowerCase()) {
-      setError("You cannot change your own role");
-      return;
-    }
-    setLoading("role");
-    try {
-      const updated = await updateUserRoleByEmail({ email: roleEmail.trim(), role: targetRole });
-      setRoleEmail("");
-      setSuccess(`${updated.email} role updated to ${updated.role}`);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save role");
     } finally {
       setLoading(undefined);
     }
@@ -283,46 +253,11 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
                   <option value="admin">admin</option>
                   <option value="editor">editor</option>
                   <option value="viewer">viewer</option>
+                  <option value="guest">guest</option>
                 </Select>
               </div>
-              {user.role !== "admin" ? (
-                <p className="mt-2 text-xs text-muted">Only admin can change user roles.</p>
-              ) : null}
+              <p className="mt-2 text-xs text-muted">Member roles are managed inside each workspace by its owner.</p>
             </div>
-            {user.role === "admin" ? (
-              <div className="space-y-3 rounded-xl border border-border bg-surface-muted p-3 text-sm">
-                <div>
-                  <p className="font-medium">Change user role</p>
-                  <p className="mt-1 text-muted">Enter the email of an existing user and select a new role.</p>
-                </div>
-                <Input
-                  value={roleEmail}
-                  onChange={(event) => setRoleEmail(event.target.value)}
-                  type="email"
-                  placeholder="User email"
-                />
-                <div className="flex flex-wrap gap-2">
-                  <Select
-                    value={targetRole}
-                    onChange={(event) => setTargetRole(event.target.value as UserRole)}
-                    wrapperClassName="w-40"
-                    className="h-9 rounded-lg bg-surface py-1 text-sm"
-                  >
-                    <option value="admin">admin</option>
-                    <option value="editor">editor</option>
-                    <option value="viewer">viewer</option>
-                  </Select>
-                  <Button
-                    variant="secondary"
-                    className="min-h-8 px-3 py-1 text-xs"
-                    onClick={onSaveRoleByEmail}
-                    disabled={loading === "role"}
-                  >
-                    {loading === "role" ? "Saving..." : "Save role"}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
             <Input
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}

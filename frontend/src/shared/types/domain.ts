@@ -39,6 +39,7 @@ export interface Project {
   color: string;
   visibility: ProjectVisibility;
   memberIds: ID[];
+  ownerId?: ID;
   shareToken?: string;
   createdAt: string;
 }

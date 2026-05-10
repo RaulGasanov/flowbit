@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 import { userApi } from "@/entities/user/api/user-api";
 import { permissionsByRole } from "@/entities/user/model/permissions";
 import type { UploadAvatarInput } from "@/shared/api/model/contracts";
-import type { ThemePreference, User, UserRole, UserSettings } from "@/shared/types/domain";
+import type { ThemePreference, User, UserSettings } from "@/shared/types/domain";
 
 interface UserState {
   users: User[];
@@ -17,7 +17,6 @@ interface UserState {
   clearSession: () => void;
   setCurrentUser: (userId: string) => void;
   updateProfile: (input: { name: string; email: string; bio: string }) => Promise<void>;
-  updateUserRoleByEmail: (input: { email: string; role: UserRole }) => Promise<User>;
   updateSettings: (settings: UserSettings) => Promise<void>;
   uploadAvatar: (input: UploadAvatarInput) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -83,14 +82,6 @@ export const useUserStore = create<UserState>()(
           set({ users: previousUsers });
           throw new Error("Unable to update profile");
         }
-      },
-
-      updateUserRoleByEmail: async (input) => {
-        const updated = await userApi.updateRole(input);
-        set({
-          users: applyUserUpdate(get().users, updated.id, () => mergeUserSettings(updated, get().persistedSettings)),
-        });
-        return updated;
       },
 
       updateSettings: async (settings) => {

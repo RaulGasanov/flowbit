@@ -89,6 +89,7 @@ type Project struct {
 	Color       string      `json:"color" gorm:"not null"`
 	Visibility  string      `json:"visibility" gorm:"not null"`
 	MemberIDs   StringSlice `json:"memberIds" gorm:"column:member_ids;type:jsonb;not null"`
+	OwnerID     string      `json:"ownerId,omitempty" gorm:"column:owner_id;type:text;not null;default:''"`
 	ShareToken  string      `json:"shareToken,omitempty" gorm:"column:share_token;type:text;not null;default:''"`
 	CreatedAt   string      `json:"createdAt" gorm:"not null"`
 }
@@ -207,6 +208,11 @@ func (s *appStore) migrate() error {
 			return err
 		}
 	}
+	if s.db.Migrator().HasTable(&Project{}) && !s.db.Migrator().HasColumn(&Project{}, "OwnerID") {
+		if err := s.db.Migrator().AddColumn(&Project{}, "OwnerID"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -218,6 +224,11 @@ func (s *appStore) load() error {
 	projects, err := s.loadProjects()
 	if err != nil {
 		return err
+	}
+	for i := range projects {
+		if projects[i].OwnerID == "" && len(projects[i].MemberIDs) > 0 {
+			projects[i].OwnerID = projects[i].MemberIDs[0]
+		}
 	}
 	tasks, err := s.loadTasks()
 	if err != nil {
@@ -527,30 +538,43 @@ func (a *app) updateUserRoleByEmail(w http.ResponseWriter, r *http.Request, curr
 		methodNotAllowed(w)
 		return
 	}
-	if current.Role != "admin" {
-		errorJSON(w, http.StatusForbidden, "Only admin can update roles")
-		return
-	}
 	var input struct {
-		Email string `json:"email"`
-		Role  string `json:"role"`
+		ProjectID string `json:"projectId"`
+		Email     string `json:"email"`
+		Role      string `json:"role"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+	input.ProjectID = strings.TrimSpace(input.ProjectID)
 	input.Email = strings.TrimSpace(input.Email)
 	input.Role = strings.TrimSpace(input.Role)
-	if input.Email == "" || input.Role == "" {
-		errorJSON(w, http.StatusBadRequest, "Email and role are required")
+	if input.ProjectID == "" || input.Email == "" || input.Role == "" {
+		errorJSON(w, http.StatusBadRequest, "Workspace, email and role are required")
 		return
 	}
-	if !isValidUserRole(input.Role) {
-		errorJSON(w, http.StatusBadRequest, "Invalid role")
+	if input.Role != "viewer" && input.Role != "editor" {
+		errorJSON(w, http.StatusBadRequest, "Workspace owner can only assign viewer or editor role here")
 		return
 	}
 
 	a.store.mu.Lock()
 	defer a.store.mu.Unlock()
+	projectIndex := -1
+	for i, project := range a.store.data.Projects {
+		if project.ID == input.ProjectID {
+			projectIndex = i
+			break
+		}
+	}
+	if projectIndex < 0 || !isProjectMember(a.store.data.Projects[projectIndex], current.ID) {
+		errorJSON(w, http.StatusNotFound, "Workspace not found")
+		return
+	}
+	if a.store.data.Projects[projectIndex].OwnerID != current.ID {
+		errorJSON(w, http.StatusForbidden, "Only workspace owner can update member roles")
+		return
+	}
 	index := -1
 	for i, user := range a.store.data.Users {
 		if strings.EqualFold(user.Email, input.Email) {
@@ -565,6 +589,12 @@ func (a *app) updateUserRoleByEmail(w http.ResponseWriter, r *http.Request, curr
 	if a.store.data.Users[index].ID == current.ID {
 		errorJSON(w, http.StatusBadRequest, "You cannot change your own role")
 		return
+	}
+	if !isProjectMember(a.store.data.Projects[projectIndex], a.store.data.Users[index].ID) {
+		a.store.data.Projects[projectIndex].MemberIDs = append(
+			a.store.data.Projects[projectIndex].MemberIDs,
+			a.store.data.Users[index].ID,
+		)
 	}
 	a.store.data.Users[index].Role = input.Role
 	a.saveAndWriteUser(w, index)
@@ -739,6 +769,7 @@ func (a *app) projects(w http.ResponseWriter, r *http.Request, user User) {
 		Color:       input.Color,
 		Visibility:  input.Visibility,
 		MemberIDs:   StringSlice(memberIDs),
+		OwnerID:     user.ID,
 		CreatedAt:   time.Now().Format(time.RFC3339Nano),
 	}
 	a.store.data.Projects = append(a.store.data.Projects, project)

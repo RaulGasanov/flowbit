@@ -7,6 +7,7 @@ import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Card } from "@/shared/ui/card";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 import { Toast } from "@/shared/ui/toast";
 import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
@@ -50,6 +51,10 @@ export default function ProjectBoardPage() {
   const addComment = useAddComment();
   const changeBoardVisibility = useChangeBoardVisibility();
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState<"viewer" | "editor">("viewer");
+  const [shareLoading, setShareLoading] = useState<string>();
   const [statusToast, setStatusToast] = useState<{ tone: "success" | "error"; message: string }>();
 
   const showMessage = (message: string, tone: "success" | "error" = "success") => {
@@ -67,6 +72,7 @@ export default function ProjectBoardPage() {
   }, [loadTasks, projectId, query]);
 
   const project = projects.find((item) => item.id === projectId);
+  const isWorkspaceOwner = Boolean(project && currentUser && project.ownerId === currentUser.id);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const selectedComments = selectedTask ? commentsByTaskId[selectedTask.id] ?? [] : [];
 
@@ -117,16 +123,7 @@ export default function ProjectBoardPage() {
           <Button
             variant="secondary"
             className="h-9 min-h-9 rounded-lg px-4 text-sm"
-            onClick={async () => {
-              try {
-                const { token } = await projectApi.share(project.id);
-                const link = `${window.location.origin}/guest/workspaces/${token}`;
-                await navigator.clipboard?.writeText(link);
-                showMessage("Workspace link copied");
-              } catch (shareError) {
-                showMessage(shareError instanceof Error ? shareError.message : "Unable to create share link", "error");
-              }
-            }}
+            onClick={() => setShareModalOpen(true)}
           >
             Share
           </Button>
@@ -177,6 +174,104 @@ export default function ProjectBoardPage() {
               setCreateModalOpen(false);
             }}
           />
+        ) : null}
+      </Modal>
+
+      <Modal open={shareModalOpen} title="Share workspace" onClose={() => setShareModalOpen(false)}>
+        {project ? (
+          <div className="space-y-4">
+            <section className="rounded-xl border border-border bg-panel p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Guest link</p>
+                  <p className="mt-1 text-xs text-muted">Anyone with this link can view this workspace without editing.</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  className="min-h-9 rounded-lg px-3 py-1 text-sm"
+                  disabled={shareLoading === "guest"}
+                  onClick={async () => {
+                    setShareLoading("guest");
+                    try {
+                      const { token } = await projectApi.share(project.id);
+                      const link = `${window.location.origin}/guest/workspaces/${token}`;
+                      await navigator.clipboard?.writeText(link);
+                      showMessage("Guest link copied");
+                    } catch (shareError) {
+                      showMessage(shareError instanceof Error ? shareError.message : "Unable to create share link", "error");
+                    } finally {
+                      setShareLoading(undefined);
+                    }
+                  }}
+                >
+                  {shareLoading === "guest" ? "Copying..." : "Copy guest link"}
+                </Button>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-border bg-panel p-3">
+              <div>
+                <p className="text-sm font-semibold">Add member</p>
+                <p className="mt-1 text-xs text-muted">
+                  Add an existing user to this workspace so it appears in their sidebar and stays synced.
+                </p>
+              </div>
+              {isWorkspaceOwner ? (
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <label className="grid min-w-0 flex-1 gap-1 text-xs font-medium text-muted">
+                    Email
+                    <Input
+                      value={memberEmail}
+                      onChange={(event) => setMemberEmail(event.target.value)}
+                      type="email"
+                      placeholder="User email"
+                      className="h-9 rounded-lg bg-surface text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-muted">
+                    Access
+                    <Select
+                      value={memberRole}
+                      onChange={(event) => setMemberRole(event.target.value as "viewer" | "editor")}
+                      wrapperClassName="w-32"
+                      className="h-9 rounded-lg bg-surface py-1 text-sm"
+                    >
+                      <option value="viewer">viewer</option>
+                      <option value="editor">editor</option>
+                    </Select>
+                  </label>
+                  <Button
+                    variant="secondary"
+                    className="min-h-9 rounded-lg px-3 py-1 text-sm"
+                    disabled={shareLoading === "member" || !memberEmail.trim()}
+                    onClick={async () => {
+                      setShareLoading("member");
+                      try {
+                        const updated = await projectApi.updateMemberRole({
+                          projectId: project.id,
+                          email: memberEmail.trim(),
+                          role: memberRole,
+                        });
+                        setMemberEmail("");
+                        await Promise.all([loadUsers(), loadProjects()]);
+                        showMessage(`${updated.email} added as ${updated.role}`);
+                      } catch (roleError) {
+                        showMessage(roleError instanceof Error ? roleError.message : "Unable to add member", "error");
+                      } finally {
+                        setShareLoading(undefined);
+                      }
+                    }}
+                  >
+                    {shareLoading === "member" ? "Adding..." : "Add"}
+                  </Button>
+                </div>
+              ) : (
+                <p className="mt-3 rounded-lg bg-surface-muted px-3 py-2 text-xs text-muted">
+                  Only the workspace owner can add members.
+                </p>
+              )}
+            </section>
+          </div>
         ) : null}
       </Modal>
 
