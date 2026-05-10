@@ -6,23 +6,36 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/widgets/app-shell/ui/app-shell";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
-import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
+import { useCurrentUser } from "@/entities/user/model/store";
+import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { taskApi } from "@/entities/task/api/task-api";
 import { userApi } from "@/entities/user/api/user-api";
+import { projectApi } from "@/entities/project/api/project-api";
 import { TaskDetails } from "@/entities/task/ui/task-details";
-import type { Task, TaskComment, User } from "@/shared/types/domain";
+import type { Project, Task, TaskComment, User, WorkspaceMemberRole } from "@/shared/types/domain";
+
+const workspaceRoleFor = (project?: Project, userId?: string): WorkspaceMemberRole | undefined => {
+  if (!project || !userId) {
+    return undefined;
+  }
+  if (project.ownerId === userId) {
+    return "owner";
+  }
+  return project.memberRoles?.[userId];
+};
 
 export default function TaskPage() {
   const params = useParams<{ id: string }>();
   const taskId = params.id;
 
   const [task, setTask] = useState<Task | null>(null);
+  const [project, setProject] = useState<Project>();
   const [users, setUsers] = useState<User[]>([]);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>();
   const currentUser = useCurrentUser();
-  const permissions = useCurrentPermissions();
+  const permissions = permissionsByWorkspaceRole(workspaceRoleFor(project, currentUser?.id));
 
   useEffect(() => {
     const load = async () => {
@@ -36,7 +49,11 @@ export default function TaskPage() {
         setTask(taskResponse);
         setUsers(usersResponse);
         if (taskResponse) {
-          const commentsResponse = await taskApi.listComments(taskResponse.id);
+          const [projectResponse, commentsResponse] = await Promise.all([
+            projectApi.getById(taskResponse.projectId),
+            taskApi.listComments(taskResponse.id),
+          ]);
+          setProject(projectResponse ?? undefined);
           setComments(commentsResponse);
         }
       } catch (loadError) {

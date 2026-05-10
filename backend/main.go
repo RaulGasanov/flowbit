@@ -70,6 +70,27 @@ func (s *StringSlice) Scan(value any) error {
 	return json.Unmarshal(bytes, s)
 }
 
+type StringMap map[string]string
+
+func (m StringMap) Value() (driver.Value, error) {
+	if m == nil {
+		return "{}", nil
+	}
+	return json.Marshal(m)
+}
+
+func (m *StringMap) Scan(value any) error {
+	bytes, ok := value.([]byte)
+	if !ok {
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("scan string map: unsupported value %T", value)
+		}
+		bytes = []byte(text)
+	}
+	return json.Unmarshal(bytes, m)
+}
+
 type User struct {
 	ID           string       `json:"id" gorm:"primaryKey;type:text"`
 	Name         string       `json:"name" gorm:"not null"`
@@ -89,6 +110,7 @@ type Project struct {
 	Color       string      `json:"color" gorm:"not null"`
 	Visibility  string      `json:"visibility" gorm:"not null"`
 	MemberIDs   StringSlice `json:"memberIds" gorm:"column:member_ids;type:jsonb;not null"`
+	MemberRoles StringMap   `json:"memberRoles" gorm:"column:member_roles;type:jsonb;not null;default:'{}'"`
 	OwnerID     string      `json:"ownerId,omitempty" gorm:"column:owner_id;type:text;not null;default:''"`
 	ShareToken  string      `json:"shareToken,omitempty" gorm:"column:share_token;type:text;not null;default:''"`
 	CreatedAt   string      `json:"createdAt" gorm:"not null"`
@@ -213,6 +235,11 @@ func (s *appStore) migrate() error {
 			return err
 		}
 	}
+	if s.db.Migrator().HasTable(&Project{}) && !s.db.Migrator().HasColumn(&Project{}, "MemberRoles") {
+		if err := s.db.Migrator().AddColumn(&Project{}, "MemberRoles"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -229,6 +256,7 @@ func (s *appStore) load() error {
 		if projects[i].OwnerID == "" && len(projects[i].MemberIDs) > 0 {
 			projects[i].OwnerID = projects[i].MemberIDs[0]
 		}
+		normalizeProjectRoles(&projects[i], users)
 	}
 	tasks, err := s.loadTasks()
 	if err != nil {
@@ -426,7 +454,7 @@ func (a *app) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Role == "" {
-		input.Role = "viewer"
+		input.Role = "editor"
 	}
 	if !isValidUserRole(input.Role) {
 		errorJSON(w, http.StatusBadRequest, "Invalid role")
@@ -590,14 +618,24 @@ func (a *app) updateUserRoleByEmail(w http.ResponseWriter, r *http.Request, curr
 		errorJSON(w, http.StatusBadRequest, "You cannot change your own role")
 		return
 	}
+	if a.store.data.Projects[projectIndex].MemberRoles == nil {
+		a.store.data.Projects[projectIndex].MemberRoles = StringMap{}
+	}
 	if !isProjectMember(a.store.data.Projects[projectIndex], a.store.data.Users[index].ID) {
 		a.store.data.Projects[projectIndex].MemberIDs = append(
 			a.store.data.Projects[projectIndex].MemberIDs,
 			a.store.data.Users[index].ID,
 		)
 	}
-	a.store.data.Users[index].Role = input.Role
-	a.saveAndWriteUser(w, index)
+	a.store.data.Projects[projectIndex].MemberRoles[a.store.data.Users[index].ID] = input.Role
+	if err := a.store.save(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "Unable to save workspace member")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user": a.store.data.Users[index],
+		"role": input.Role,
+	})
 }
 
 func (a *app) userByID(w http.ResponseWriter, r *http.Request, current User) {
@@ -769,6 +807,7 @@ func (a *app) projects(w http.ResponseWriter, r *http.Request, user User) {
 		Color:       input.Color,
 		Visibility:  input.Visibility,
 		MemberIDs:   StringSlice(memberIDs),
+		MemberRoles: StringMap{user.ID: "owner"},
 		OwnerID:     user.ID,
 		CreatedAt:   time.Now().Format(time.RFC3339Nano),
 	}
@@ -813,6 +852,10 @@ func (a *app) projectByID(w http.ResponseWriter, r *http.Request, user User) {
 		return
 	}
 	if r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "share" {
+		if projectRole(a.store.data.Projects[index], user.ID) != "owner" {
+			errorJSON(w, http.StatusForbidden, "Only workspace owner can share this workspace")
+			return
+		}
 		if a.store.data.Projects[index].ShareToken == "" {
 			a.store.data.Projects[index].ShareToken = randomID("shr")
 			if err := a.store.save(); err != nil {
@@ -823,7 +866,29 @@ func (a *app) projectByID(w http.ResponseWriter, r *http.Request, user User) {
 		writeJSON(w, http.StatusOK, map[string]string{"token": a.store.data.Projects[index].ShareToken})
 		return
 	}
+	if r.Method == http.MethodDelete && len(parts) == 3 && parts[1] == "members" {
+		if projectRole(a.store.data.Projects[index], user.ID) != "owner" {
+			errorJSON(w, http.StatusForbidden, "Only workspace owner can remove members")
+			return
+		}
+		memberID := parts[2]
+		if memberID == "" || memberID == a.store.data.Projects[index].OwnerID {
+			errorJSON(w, http.StatusBadRequest, "Workspace owner cannot be removed")
+			return
+		}
+		a.removeProjectMemberLocked(index, memberID)
+		if err := a.store.save(); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "Unable to remove workspace member")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method == http.MethodPatch && len(parts) == 1 {
+		if projectRole(a.store.data.Projects[index], user.ID) != "owner" {
+			errorJSON(w, http.StatusForbidden, "Only workspace owner can update workspace settings")
+			return
+		}
 		var input struct {
 			Visibility string `json:"visibility"`
 		}
@@ -875,6 +940,10 @@ func (a *app) tasks(w http.ResponseWriter, r *http.Request, user User) {
 		}
 		if !a.canAccessProjectLocked(input.ProjectID, user) {
 			errorJSON(w, http.StatusNotFound, "Workspace not found")
+			return
+		}
+		if !a.canEditProjectLocked(input.ProjectID, user.ID) {
+			errorJSON(w, http.StatusForbidden, "You do not have permission to create tasks in this workspace")
 			return
 		}
 		if input.AssigneeID != "" && !a.isProjectMemberLocked(input.ProjectID, input.AssigneeID) {
@@ -938,6 +1007,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 	case r.Method == http.MethodGet && len(parts) == 1:
 		writeJSON(w, http.StatusOK, a.store.data.Tasks[index])
 	case r.Method == http.MethodPatch && len(parts) == 1:
+		if !a.canEditProjectLocked(a.store.data.Tasks[index].ProjectID, user.ID) {
+			errorJSON(w, http.StatusForbidden, "You do not have permission to edit tasks in this workspace")
+			return
+		}
 		var input struct {
 			Title       *string `json:"title"`
 			Description *string `json:"description"`
@@ -989,6 +1062,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 		}
 		writeJSON(w, http.StatusOK, task)
 	case r.Method == http.MethodDelete && len(parts) == 1:
+		if !a.canManageProjectLocked(a.store.data.Tasks[index].ProjectID, user.ID) {
+			errorJSON(w, http.StatusForbidden, "Only workspace owner can delete tasks")
+			return
+		}
 		a.store.data.Tasks = append(a.store.data.Tasks[:index], a.store.data.Tasks[index+1:]...)
 		filtered := a.store.data.Comments[:0]
 		for _, comment := range a.store.data.Comments {
@@ -1003,6 +1080,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "reorder":
+		if !a.canEditProjectLocked(a.store.data.Tasks[index].ProjectID, user.ID) {
+			errorJSON(w, http.StatusForbidden, "You do not have permission to reorder tasks in this workspace")
+			return
+		}
 		var input struct {
 			Status string `json:"status"`
 			Index  int    `json:"index"`
@@ -1026,6 +1107,10 @@ func (a *app) taskByID(w http.ResponseWriter, r *http.Request, user User) {
 		sort.Slice(comments, func(i, j int) bool { return comments[i].CreatedAt > comments[j].CreatedAt })
 		writeJSON(w, http.StatusOK, comments)
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "comments":
+		if !a.canEditProjectLocked(a.store.data.Tasks[index].ProjectID, user.ID) {
+			errorJSON(w, http.StatusForbidden, "You do not have permission to comment in this workspace")
+			return
+		}
 		var input struct {
 			AuthorID string `json:"authorId"`
 			Body     string `json:"body"`
@@ -1271,6 +1356,25 @@ func (a *app) isProjectMemberLocked(projectID, userID string) bool {
 	return false
 }
 
+func (a *app) canEditProjectLocked(projectID, userID string) bool {
+	for _, project := range a.store.data.Projects {
+		if project.ID == projectID {
+			role := projectRole(project, userID)
+			return role == "owner" || role == "editor"
+		}
+	}
+	return false
+}
+
+func (a *app) canManageProjectLocked(projectID, userID string) bool {
+	for _, project := range a.store.data.Projects {
+		if project.ID == projectID {
+			return projectRole(project, userID) == "owner"
+		}
+	}
+	return false
+}
+
 func (a *app) projectByShareTokenLocked(token string) (Project, bool) {
 	for _, project := range a.store.data.Projects {
 		if project.ShareToken == token {
@@ -1307,6 +1411,25 @@ func (a *app) taskIndexLocked(id string) int {
 	return -1
 }
 
+func (a *app) removeProjectMemberLocked(projectIndex int, userID string) {
+	project := &a.store.data.Projects[projectIndex]
+	memberIDs := project.MemberIDs[:0]
+	for _, memberID := range project.MemberIDs {
+		if memberID != userID {
+			memberIDs = append(memberIDs, memberID)
+		}
+	}
+	project.MemberIDs = memberIDs
+	if project.MemberRoles != nil {
+		delete(project.MemberRoles, userID)
+	}
+	for i := range a.store.data.Tasks {
+		if a.store.data.Tasks[i].ProjectID == project.ID && a.store.data.Tasks[i].AssigneeID == userID {
+			a.store.data.Tasks[i].AssigneeID = ""
+		}
+	}
+}
+
 func isProjectMember(project Project, userID string) bool {
 	for _, memberID := range project.MemberIDs {
 		if memberID == userID {
@@ -1314,6 +1437,51 @@ func isProjectMember(project Project, userID string) bool {
 		}
 	}
 	return false
+}
+
+func projectRole(project Project, userID string) string {
+	if project.OwnerID == userID {
+		return "owner"
+	}
+	if !isProjectMember(project, userID) {
+		return ""
+	}
+	if role := project.MemberRoles[userID]; role == "owner" || role == "editor" || role == "viewer" {
+		return role
+	}
+	return "editor"
+}
+
+func normalizeProjectRoles(project *Project, users []User) {
+	if project.MemberRoles == nil {
+		project.MemberRoles = StringMap{}
+	}
+	for _, memberID := range project.MemberIDs {
+		if memberID == "" {
+			continue
+		}
+		if memberID == project.OwnerID {
+			project.MemberRoles[memberID] = "owner"
+			continue
+		}
+		if role := project.MemberRoles[memberID]; role == "editor" || role == "viewer" {
+			continue
+		}
+		project.MemberRoles[memberID] = defaultWorkspaceRole(memberID, users)
+	}
+}
+
+func defaultWorkspaceRole(userID string, users []User) string {
+	for _, user := range users {
+		if user.ID != userID {
+			continue
+		}
+		if user.Role == "viewer" {
+			return "viewer"
+		}
+		return "editor"
+	}
+	return "editor"
 }
 
 func (a *app) deleteUserLocked(userID string) {
@@ -1328,6 +1496,12 @@ func (a *app) deleteUserLocked(userID string) {
 		if a.store.data.Tasks[i].AssigneeID == userID {
 			a.store.data.Tasks[i].AssigneeID = ""
 		}
+	}
+	for i := range a.store.data.Projects {
+		if a.store.data.Projects[i].OwnerID == userID {
+			continue
+		}
+		a.removeProjectMemberLocked(i, userID)
 	}
 	comments := a.store.data.Comments[:0]
 	for _, comment := range a.store.data.Comments {

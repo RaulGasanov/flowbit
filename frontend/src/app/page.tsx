@@ -7,7 +7,8 @@ import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Avatar } from "@/shared/ui/avatar";
 import { Toast } from "@/shared/ui/toast";
-import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
+import { useCurrentUser } from "@/entities/user/model/store";
+import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { useProjectsStore } from "@/entities/project/model/store";
 import { BoardSkeleton } from "@/widgets/board/ui/board-skeleton";
 import { KanbanBoard } from "@/widgets/board/ui/kanban-board";
@@ -19,7 +20,7 @@ import { useEditTask } from "@/features/edit-task/model/use-edit-task";
 import { TaskDetails } from "@/entities/task/ui/task-details";
 import { formatTaskDeadline, getDeadlineState } from "@/entities/task/lib/deadline";
 import { useTasksStore } from "@/entities/task/model/store";
-import type { Task, TaskPriority, TaskStatus, User } from "@/shared/types/domain";
+import type { Project, Task, TaskPriority, TaskStatus, User, WorkspaceMemberRole } from "@/shared/types/domain";
 
 interface TaskFilter {
   hideCompleted: boolean;
@@ -33,6 +34,16 @@ interface TaskFilter {
 
 type StatusToast = { message: string; tone: "success" | "error" };
 type SortDirection = "none" | "asc" | "desc";
+
+const workspaceRoleFor = (project?: Project, userId?: string): WorkspaceMemberRole | undefined => {
+  if (!project || !userId) {
+    return undefined;
+  }
+  if (project.ownerId === userId) {
+    return "owner";
+  }
+  return project.memberRoles?.[userId];
+};
 
 const defaultTaskFilter: TaskFilter = {
   hideCompleted: true,
@@ -360,12 +371,14 @@ const TaskTable = ({
   users,
   onOpenTask,
   onNew,
+  canToggleTask,
   onToggleTaskDone,
 }: {
   tasks: Task[];
   users: User[];
   onOpenTask: (taskId: string) => void;
   onNew: () => void;
+  canToggleTask: (task: Task) => boolean;
   onToggleTaskDone: (task: Task) => void;
 }) => (
   <div className="overflow-x-auto">
@@ -387,6 +400,7 @@ const TaskTable = ({
       <tbody>
         {tasks.map((task, index) => {
           const assignee = users.find((user) => user.id === task.assigneeId);
+          const canToggle = canToggleTask(task);
           return (
             <tr
               key={task.id}
@@ -402,8 +416,12 @@ const TaskTable = ({
                       : "grid h-4 w-4 place-items-center rounded-full border border-border bg-panel transition hover:border-accent/60 hover:bg-accent/5"
                   }
                   aria-label={task.status === "done" ? `Mark ${task.title} as todo` : `Mark ${task.title} as done`}
+                  disabled={!canToggle}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (!canToggle) {
+                      return;
+                    }
                     onToggleTaskDone(task);
                   }}
                 >
@@ -480,7 +498,6 @@ export default function DashboardPage() {
   } = useTasksStore();
   const { projects, isLoading: projectsLoading } = useProjectsStore();
   const currentUser = useCurrentUser();
-  const permissions = useCurrentPermissions();
   const createTask = useCreateTask();
   const editTask = useEditTask();
   const moveTask = useMoveTask();
@@ -507,6 +524,13 @@ export default function DashboardPage() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const selectedComments = selectedTask ? commentsByTaskId[selectedTask.id] ?? [] : [];
+  const editableProjects = projects.filter((project) =>
+    permissionsByWorkspaceRole(workspaceRoleFor(project, currentUser?.id)).canCreateTask,
+  );
+  const canEditAnyWorkspace = editableProjects.length > 0;
+  const selectedTaskPermissions = permissionsByWorkspaceRole(
+    workspaceRoleFor(projects.find((project) => project.id === selectedTask?.projectId), currentUser?.id),
+  );
   const projectMembers = users.slice(0, 4);
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => taskMatchesFilter(task, taskFilter));
@@ -534,6 +558,10 @@ export default function DashboardPage() {
   const openCreateTask = (status: TaskStatus = "todo") => {
     if (projects.length === 0) {
       showMessage("Create a workspace before adding tasks", "error");
+      return;
+    }
+    if (!canEditAnyWorkspace) {
+      showMessage("You only have view access in your workspaces", "error");
       return;
     }
     setCreateTaskStatus(status);
@@ -626,6 +654,11 @@ export default function DashboardPage() {
                 users={users}
                 onOpenTask={selectTask}
                 onNew={openCreateTask}
+                canToggleTask={(task) =>
+                  permissionsByWorkspaceRole(
+                    workspaceRoleFor(projects.find((project) => project.id === task.projectId), currentUser?.id),
+                  ).canEditTask
+                }
                 onToggleTaskDone={(task) => {
                   void updateTaskStatus(task.id, task.status === "done" ? "todo" : "done").catch((toggleError) => {
                     showMessage(toggleError instanceof Error ? toggleError.message : "Unable to update task", "error");
@@ -648,7 +681,7 @@ export default function DashboardPage() {
                 <KanbanBoard
                   tasks={tasks}
                   users={users}
-                  canEdit={permissions.canEditTask}
+                  canEdit={canEditAnyWorkspace}
                   onOpenTask={selectTask}
                   onMoveTask={moveTask}
                 />
@@ -660,9 +693,9 @@ export default function DashboardPage() {
 
       <Modal open={createModalOpen} title="New task" onClose={() => setCreateModalOpen(false)}>
         <TaskCreateForm
-          projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          projects={editableProjects.map((project) => ({ id: project.id, name: project.name }))}
           users={users}
-          disabled={!permissions.canCreateTask || projects.length === 0}
+          disabled={!canEditAnyWorkspace || projects.length === 0}
           initialStatus={createTaskStatus}
           onCreate={async (input) => {
             await createTask(input);
@@ -679,9 +712,9 @@ export default function DashboardPage() {
               assignee={users.find((user) => user.id === selectedTask.assigneeId)}
               comments={selectedComments}
               users={users}
-              canComment={permissions.canComment}
-              canEdit={permissions.canEditTask}
-              canDelete={permissions.canDeleteTask}
+              canComment={selectedTaskPermissions.canComment}
+              canEdit={selectedTaskPermissions.canEditTask}
+              canDelete={selectedTaskPermissions.canDeleteTask}
               onUpdateTask={async (input) => {
                 await editTask(selectedTask.id, input);
               }}

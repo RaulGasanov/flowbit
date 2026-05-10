@@ -2,7 +2,6 @@ import type {
   ID,
   Notification,
   Project,
-  ProjectVisibility,
   SharedWorkspace,
   ThemePreference,
   Task,
@@ -11,6 +10,7 @@ import type {
   User,
   UserRole,
   UserSettings,
+  WorkspaceMemberRole,
 } from "@/shared/types/domain";
 
 export interface TaskQuery {
@@ -54,12 +54,7 @@ export interface CreateProjectInput {
   name: string;
   description: string;
   color: string;
-  visibility: ProjectVisibility;
   memberIds?: ID[];
-}
-
-export interface UpdateProjectInput {
-  visibility: ProjectVisibility;
 }
 
 export interface UpdateUserProfileInput {
@@ -68,12 +63,15 @@ export interface UpdateUserProfileInput {
   bio?: string;
 }
 
-export type WorkspaceMemberRole = "viewer" | "editor";
-
 export interface UpdateUserRoleInput {
   projectId: ID;
   email: string;
-  role: WorkspaceMemberRole;
+  role: Exclude<WorkspaceMemberRole, "owner">;
+}
+
+export interface WorkspaceMemberResponse {
+  user: User;
+  role: Exclude<WorkspaceMemberRole, "owner">;
 }
 
 export interface UpdateUserSettingsInput {
@@ -97,7 +95,7 @@ export interface AuthCredentials {
 
 export interface RegisterInput extends AuthCredentials {
   name: string;
-  role: UserRole;
+  role?: UserRole;
 }
 
 export interface AuthSession {
@@ -116,9 +114,9 @@ export interface ApiClient {
   listProjects(): Promise<Project[]>;
   getProjectById(id: ID): Promise<Project | null>;
   createProject(input: CreateProjectInput): Promise<Project>;
-  updateProject(id: ID, input: UpdateProjectInput): Promise<Project>;
   shareProject(id: ID): Promise<ShareProjectResponse>;
   getSharedWorkspace(token: string): Promise<SharedWorkspace>;
+  removeWorkspaceMember(projectId: ID, userId: ID): Promise<void>;
   listUsers(): Promise<User[]>;
   listTasks(query?: TaskQuery): Promise<Task[]>;
   getTaskById(id: ID): Promise<Task | null>;
@@ -132,7 +130,7 @@ export interface ApiClient {
   markNotificationRead(notificationId: ID): Promise<void>;
   markAllNotificationsRead(userId: ID): Promise<void>;
   updateUserProfile(userId: ID, input: UpdateUserProfileInput): Promise<User>;
-  updateUserRole(input: UpdateUserRoleInput): Promise<User>;
+  updateUserRole(input: UpdateUserRoleInput): Promise<WorkspaceMemberResponse>;
   updateUserSettings(userId: ID, input: UpdateUserSettingsInput): Promise<User>;
   uploadAvatar(userId: ID, input: UploadAvatarInput): Promise<{ avatarUrl: string }>;
   changePassword(userId: ID, input: ChangePasswordInput): Promise<void>;

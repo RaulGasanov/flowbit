@@ -8,7 +8,6 @@ import type {
   RegisterInput,
   ReorderTaskInput,
   TaskQuery,
-  UpdateProjectInput,
   UpdateTaskInput,
   UpdateUserProfileInput,
   UpdateUserRoleInput,
@@ -96,10 +95,10 @@ export const httpApiClient: ApiClient = {
   getProjectById: (id: ID) => request(`/workspaces/${id}`),
   createProject: (input: CreateProjectInput) =>
     request("/workspaces", { method: "POST", body: JSON.stringify(input) }),
-  updateProject: (id: ID, input: UpdateProjectInput) =>
-    request(`/workspaces/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   shareProject: (id: ID) => request(`/workspaces/${id}/share`, { method: "POST" }),
   getSharedWorkspace: (token: string) => request(`/shared/workspaces/${token}`),
+  removeWorkspaceMember: (projectId: ID, userId: ID) =>
+    request(`/workspaces/${projectId}/members/${userId}`, { method: "DELETE" }),
 
   listUsers: () => request("/users"),
   updateUserProfile: (userId: ID, input: UpdateUserProfileInput) =>

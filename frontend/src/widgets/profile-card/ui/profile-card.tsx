@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { Avatar } from "@/shared/ui/avatar";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
-import { RoleBadge } from "@/entities/user/ui/role-badge";
 import type { User } from "@/shared/types/domain";
 import { useUploadAvatar } from "@/features/upload-avatar/model/use-upload-avatar";
 
@@ -44,9 +43,6 @@ export const ProfileCard = ({ user }: ProfileCardProps) => {
         <div>
           <p className="text-lg font-semibold">{user.name}</p>
           <p className="text-sm text-foreground/70">{user.email}</p>
-          <div className="mt-1">
-            <RoleBadge role={user.role} />
-          </div>
         </div>
       </div>
       <p className="text-sm text-foreground/80">{user.bio}</p>

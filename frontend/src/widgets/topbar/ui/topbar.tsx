@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Avatar } from "@/shared/ui/avatar";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
-import { RoleBadge } from "@/entities/user/ui/role-badge";
 import { useCurrentUser } from "@/entities/user/model/store";
 import { useAuthStore } from "@/entities/auth/model/store";
 import { useProjectsStore } from "@/entities/project/model/store";
@@ -253,7 +252,6 @@ export const Topbar = ({ onSearch, onToggleSidebar, showSearch = false }: Topbar
                }}
             />
          ) : null}
-         <div className="hidden lg:block">{currentUser ? <RoleBadge role={currentUser.role} /> : null}</div>
          <Button
             variant="ghost"
             onClick={() => toggleTheme(currentUser?.settings.theme === "dark" ? "light" : "dark")}

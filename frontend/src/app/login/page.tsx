@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
-import { Select } from "@/shared/ui/select";
 import { useAuthStore } from "@/entities/auth/model/store";
-import type { UserRole } from "@/shared/types/domain";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +14,6 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("viewer");
   const [submitError, setSubmitError] = useState<string>();
 
   useEffect(() => {
@@ -30,7 +27,7 @@ export default function LoginPage() {
     setSubmitError(undefined);
     try {
       if (mode === "register") {
-        await register({ name: name.trim(), email: email.trim(), password, role });
+        await register({ name: name.trim(), email: email.trim(), password });
       } else {
         await login({ email: email.trim(), password });
       }
@@ -69,14 +66,7 @@ export default function LoginPage() {
 
         <form className="space-y-3" onSubmit={onSubmit}>
           {mode === "register" ? (
-            <>
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" required />
-              <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
-                <option value="admin">admin</option>
-                <option value="editor">editor</option>
-                <option value="viewer">viewer</option>
-              </Select>
-            </>
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" required />
           ) : null}
           <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email" required />
           <Input

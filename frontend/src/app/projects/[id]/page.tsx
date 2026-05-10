@@ -10,8 +10,8 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 import { Toast } from "@/shared/ui/toast";
-import { useCurrentPermissions, useCurrentUser } from "@/entities/user/model/store";
-import { VisibilityBadge } from "@/entities/project/ui/visibility-badge";
+import { useCurrentUser } from "@/entities/user/model/store";
+import { permissionsByWorkspaceRole } from "@/entities/user/model/permissions";
 import { useProjectsStore } from "@/entities/project/model/store";
 import { projectApi } from "@/entities/project/api/project-api";
 import { KanbanBoard } from "@/widgets/board/ui/kanban-board";
@@ -20,9 +20,21 @@ import { useCreateTask } from "@/features/create-task/model/use-create-task";
 import { useEditTask } from "@/features/edit-task/model/use-edit-task";
 import { useMoveTask } from "@/features/move-task/model/use-move-task";
 import { useAddComment } from "@/features/add-comment/model/use-add-comment";
-import { useChangeBoardVisibility } from "@/features/change-board-visibility/model/use-change-board-visibility";
 import { TaskDetails } from "@/entities/task/ui/task-details";
 import { useTasksStore } from "@/entities/task/model/store";
+import type { User, WorkspaceMemberRole } from "@/shared/types/domain";
+
+type EditableWorkspaceRole = Exclude<WorkspaceMemberRole, "owner">;
+
+const workspaceRoleFor = (
+  project: { ownerId?: string; memberRoles?: Record<string, WorkspaceMemberRole> },
+  userId: string,
+): WorkspaceMemberRole | undefined => {
+  if (project.ownerId === userId) {
+    return "owner";
+  }
+  return project.memberRoles?.[userId];
+};
 
 export default function ProjectBoardPage() {
   const params = useParams<{ id: string }>();
@@ -44,16 +56,14 @@ export default function ProjectBoardPage() {
     loadComments,
   } = useTasksStore();
   const currentUser = useCurrentUser();
-  const permissions = useCurrentPermissions();
   const createTask = useCreateTask();
   const editTask = useEditTask();
   const moveTask = useMoveTask();
   const addComment = useAddComment();
-  const changeBoardVisibility = useChangeBoardVisibility();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState<"viewer" | "editor">("viewer");
+  const [memberRole, setMemberRole] = useState<EditableWorkspaceRole>("viewer");
   const [shareLoading, setShareLoading] = useState<string>();
   const [statusToast, setStatusToast] = useState<{ tone: "success" | "error"; message: string }>();
 
@@ -72,7 +82,10 @@ export default function ProjectBoardPage() {
   }, [loadTasks, projectId, query]);
 
   const project = projects.find((item) => item.id === projectId);
-  const isWorkspaceOwner = Boolean(project && currentUser && project.ownerId === currentUser.id);
+  const currentWorkspaceRole = project && currentUser ? workspaceRoleFor(project, currentUser.id) : undefined;
+  const permissions = permissionsByWorkspaceRole(currentWorkspaceRole);
+  const isWorkspaceOwner = currentWorkspaceRole === "owner";
+  const workspaceMembers = project ? users.filter((user) => project.memberIds.includes(user.id)) : [];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const selectedComments = selectedTask ? commentsByTaskId[selectedTask.id] ?? [] : [];
 
@@ -87,6 +100,46 @@ export default function ProjectBoardPage() {
     window.addEventListener("flowbit:new-task", onNewTask);
     return () => window.removeEventListener("flowbit:new-task", onNewTask);
   }, []);
+
+  const refreshWorkspaceAccess = async () => {
+    await Promise.all([loadUsers(), loadProjects()]);
+  };
+
+  const updateWorkspaceMemberRole = async (member: User, role: EditableWorkspaceRole) => {
+    if (!project) {
+      return;
+    }
+    setShareLoading(`role:${member.id}`);
+    try {
+      await projectApi.updateMemberRole({
+        projectId: project.id,
+        email: member.email,
+        role,
+      });
+      await refreshWorkspaceAccess();
+      showMessage(`${member.email} is now ${role}`);
+    } catch (roleError) {
+      showMessage(roleError instanceof Error ? roleError.message : "Unable to update member role", "error");
+    } finally {
+      setShareLoading(undefined);
+    }
+  };
+
+  const removeWorkspaceMember = async (member: User) => {
+    if (!project) {
+      return;
+    }
+    setShareLoading(`remove:${member.id}`);
+    try {
+      await projectApi.removeMember(project.id, member.id);
+      await refreshWorkspaceAccess();
+      showMessage(`${member.email} removed from workspace`);
+    } catch (removeError) {
+      showMessage(removeError instanceof Error ? removeError.message : "Unable to remove member", "error");
+    } finally {
+      setShareLoading(undefined);
+    }
+  };
 
   return (
     <AppShell showSearch>
@@ -114,51 +167,40 @@ export default function ProjectBoardPage() {
 
       {project ? (
         <>
-      <Card className="mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold">{project.name}</h1>
-            <VisibilityBadge visibility={project.visibility} />
-          </div>
-          <Button
-            variant="secondary"
-            className="h-9 min-h-9 rounded-lg px-4 text-sm"
-            onClick={() => setShareModalOpen(true)}
-          >
-            Share
-          </Button>
-        </div>
-        <p className="mt-1 text-sm text-foreground/70">{project.description}</p>
-          <div className="mt-3 flex items-center gap-2">
-            <label htmlFor="visibility" className="text-xs text-foreground/60">
-              Board visibility
-            </label>
-            <Select
-              id="visibility"
-              value={project.visibility}
-              onChange={(event) =>
-                changeBoardVisibility(project.id, event.target.value as typeof project.visibility)
-              }
-              disabled={!permissions.canManageProjectSettings}
-              wrapperClassName="w-28"
-              className="h-8 rounded-lg bg-surface-muted px-2 text-xs"
-            >
-              <option value="private">Private</option>
-              <option value="team">Team</option>
-              <option value="public">Public</option>
-            </Select>
-          </div>
-      </Card>
+          <Card className="mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold">{project.name}</h1>
+                  {currentWorkspaceRole ? (
+                    <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">
+                      {currentWorkspaceRole}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm text-foreground/70">{project.description}</p>
+              </div>
+              {isWorkspaceOwner ? (
+                <Button
+                  variant="secondary"
+                  className="h-9 min-h-9 rounded-lg px-4 text-sm"
+                  onClick={() => setShareModalOpen(true)}
+                >
+                  Share
+                </Button>
+              ) : null}
+            </div>
+          </Card>
 
-      {error ? <p className="mb-4 text-sm text-rose-500">{error}</p> : null}
-      <KanbanBoard
-        tasks={tasks}
-        users={users}
-        canEdit={permissions.canEditTask}
-        isLoading={isLoading}
-        onOpenTask={selectTask}
-        onMoveTask={moveTask}
-      />
+          {error ? <p className="mb-4 text-sm text-rose-500">{error}</p> : null}
+          <KanbanBoard
+            tasks={tasks}
+            users={users}
+            canEdit={permissions.canEditTask}
+            isLoading={isLoading}
+            onOpenTask={selectTask}
+            onMoveTask={moveTask}
+          />
         </>
       ) : null}
 
@@ -211,60 +253,112 @@ export default function ProjectBoardPage() {
 
             <section className="rounded-xl border border-border bg-panel p-3">
               <div>
-                <p className="text-sm font-semibold">Add member</p>
+                <p className="text-sm font-semibold">Workspace members</p>
                 <p className="mt-1 text-xs text-muted">
-                  Add an existing user to this workspace so it appears in their sidebar and stays synced.
+                  Add existing users, change their workspace role, or remove their access.
                 </p>
               </div>
               {isWorkspaceOwner ? (
-                <div className="mt-3 flex flex-wrap items-end gap-2">
-                  <label className="grid min-w-0 flex-1 gap-1 text-xs font-medium text-muted">
-                    Email
-                    <Input
-                      value={memberEmail}
-                      onChange={(event) => setMemberEmail(event.target.value)}
-                      type="email"
-                      placeholder="User email"
-                      className="h-9 rounded-lg bg-surface text-sm"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs font-medium text-muted">
-                    Access
-                    <Select
-                      value={memberRole}
-                      onChange={(event) => setMemberRole(event.target.value as "viewer" | "editor")}
-                      wrapperClassName="w-32"
-                      className="h-9 rounded-lg bg-surface py-1 text-sm"
+                <>
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <label className="grid min-w-0 flex-1 gap-1 text-xs font-medium text-muted">
+                      Email
+                      <Input
+                        value={memberEmail}
+                        onChange={(event) => setMemberEmail(event.target.value)}
+                        type="email"
+                        placeholder="User email"
+                        className="h-9 rounded-lg bg-surface text-sm"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs font-medium text-muted">
+                      Access
+                      <Select
+                        value={memberRole}
+                        onChange={(event) => setMemberRole(event.target.value as EditableWorkspaceRole)}
+                        wrapperClassName="w-32"
+                        className="h-9 rounded-lg bg-surface py-1 text-sm"
+                      >
+                        <option value="viewer">viewer</option>
+                        <option value="editor">editor</option>
+                      </Select>
+                    </label>
+                    <Button
+                      variant="secondary"
+                      className="min-h-9 rounded-lg px-3 py-1 text-sm"
+                      disabled={shareLoading === "member" || !memberEmail.trim()}
+                      onClick={async () => {
+                        setShareLoading("member");
+                        try {
+                          const updated = await projectApi.updateMemberRole({
+                            projectId: project.id,
+                            email: memberEmail.trim(),
+                            role: memberRole,
+                          });
+                          setMemberEmail("");
+                          await refreshWorkspaceAccess();
+                          showMessage(`${updated.user.email} added as ${updated.role}`);
+                        } catch (roleError) {
+                          showMessage(roleError instanceof Error ? roleError.message : "Unable to add member", "error");
+                        } finally {
+                          setShareLoading(undefined);
+                        }
+                      }}
                     >
-                      <option value="viewer">viewer</option>
-                      <option value="editor">editor</option>
-                    </Select>
-                  </label>
-                  <Button
-                    variant="secondary"
-                    className="min-h-9 rounded-lg px-3 py-1 text-sm"
-                    disabled={shareLoading === "member" || !memberEmail.trim()}
-                    onClick={async () => {
-                      setShareLoading("member");
-                      try {
-                        const updated = await projectApi.updateMemberRole({
-                          projectId: project.id,
-                          email: memberEmail.trim(),
-                          role: memberRole,
-                        });
-                        setMemberEmail("");
-                        await Promise.all([loadUsers(), loadProjects()]);
-                        showMessage(`${updated.email} added as ${updated.role}`);
-                      } catch (roleError) {
-                        showMessage(roleError instanceof Error ? roleError.message : "Unable to add member", "error");
-                      } finally {
-                        setShareLoading(undefined);
-                      }
-                    }}
-                  >
-                    {shareLoading === "member" ? "Adding..." : "Add"}
-                  </Button>
-                </div>
+                      {shareLoading === "member" ? "Adding..." : "Add"}
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {workspaceMembers.map((member) => {
+                      const role = workspaceRoleFor(project, member.id) ?? "viewer";
+                      const canEditMember = role !== "owner" && member.id !== currentUser?.id;
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
+                            <p className="truncate text-xs text-muted">{member.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {canEditMember ? (
+                              <Select
+                                value={role}
+                                onChange={(event) => {
+                                  void updateWorkspaceMemberRole(member, event.target.value as EditableWorkspaceRole);
+                                }}
+                                disabled={shareLoading === `role:${member.id}`}
+                                wrapperClassName="w-28"
+                                className="h-8 rounded-lg bg-surface py-1 text-xs"
+                              >
+                                <option value="viewer">viewer</option>
+                                <option value="editor">editor</option>
+                              </Select>
+                            ) : (
+                              <span className="rounded-full border border-border bg-panel px-2 py-1 text-xs font-medium text-muted">
+                                {role}
+                              </span>
+                            )}
+                            {canEditMember ? (
+                              <Button
+                                variant="ghost"
+                                className="min-h-8 rounded-lg px-2 py-1 text-xs text-rose-600"
+                                disabled={shareLoading === `remove:${member.id}`}
+                                onClick={() => {
+                                  void removeWorkspaceMember(member);
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               ) : (
                 <p className="mt-3 rounded-lg bg-surface-muted px-3 py-2 text-xs text-muted">
                   Only the workspace owner can add members.

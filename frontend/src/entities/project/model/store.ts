@@ -13,7 +13,6 @@ interface ProjectsState {
   loadProjects: () => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<Project>;
   setActiveProject: (projectId: string) => void;
-  updateVisibility: (projectId: string, visibility: Project["visibility"]) => Promise<void>;
 }
 
 export const useProjectsStore = create<ProjectsState>((set, get) => ({
@@ -57,19 +56,4 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     }
   },
 
-  updateVisibility: async (projectId, visibility) => {
-    const previousProjects = get().projects;
-    set({
-      projects: previousProjects.map((project) =>
-        project.id === projectId ? { ...project, visibility } : project,
-      ),
-    });
-
-    try {
-      await projectApi.update(projectId, { visibility });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update visibility";
-      set({ projects: previousProjects, error: message });
-    }
-  },
 }));

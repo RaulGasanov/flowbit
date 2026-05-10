@@ -4,8 +4,6 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import { Select } from "@/shared/ui/select";
-import type { ProjectVisibility } from "@/shared/types/domain";
 
 interface ProjectCreateFormProps {
   currentUserId?: string;
@@ -13,7 +11,6 @@ interface ProjectCreateFormProps {
     name: string;
     description: string;
     color: string;
-    visibility: ProjectVisibility;
     memberIds?: string[];
   }) => Promise<void>;
 }
@@ -24,7 +21,6 @@ export const ProjectCreateForm = ({ currentUserId, onCreate }: ProjectCreateForm
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(workspaceColors[0]);
-  const [visibility, setVisibility] = useState<ProjectVisibility>("team");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -41,13 +37,11 @@ export const ProjectCreateForm = ({ currentUserId, onCreate }: ProjectCreateForm
         name: name.trim(),
         description: description.trim() || "Workspace for planning and tracking tasks.",
         color,
-        visibility,
         memberIds: currentUserId ? [currentUserId] : undefined,
       });
       setName("");
       setDescription("");
       setColor(workspaceColors[0]);
-      setVisibility("team");
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Failed to create workspace");
     } finally {
@@ -81,37 +75,19 @@ export const ProjectCreateForm = ({ currentUserId, onCreate }: ProjectCreateForm
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-foreground">Color</p>
-          <div className="flex flex-wrap gap-2">
-            {workspaceColors.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className="h-9 w-9 rounded-full border-2 transition"
-                style={{ backgroundColor: item, borderColor: color === item ? "#0f172a" : "transparent" }}
-                aria-label={`Use ${item} workspace color`}
-                onClick={() => setColor(item)}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground" htmlFor="workspace-visibility">
-            Visibility
-          </label>
-          <Select
-            id="workspace-visibility"
-            value={visibility}
-            onChange={(event) => setVisibility(event.target.value as ProjectVisibility)}
-            className="border-border/70 bg-surface"
-          >
-            <option value="team">Team</option>
-            <option value="private">Private</option>
-            <option value="public">Public</option>
-          </Select>
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-foreground">Color</p>
+        <div className="flex flex-wrap gap-2">
+          {workspaceColors.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="h-9 w-9 rounded-full border-2 transition"
+              style={{ backgroundColor: item, borderColor: color === item ? "#0f172a" : "transparent" }}
+              aria-label={`Use ${item} workspace color`}
+              onClick={() => setColor(item)}
+            />
+          ))}
         </div>
       </div>
 

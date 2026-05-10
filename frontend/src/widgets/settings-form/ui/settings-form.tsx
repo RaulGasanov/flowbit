@@ -8,7 +8,6 @@ import { Modal } from "@/shared/ui/modal";
 import { Switch } from "@/shared/ui/switch";
 import { Avatar } from "@/shared/ui/avatar";
 import { Toast } from "@/shared/ui/toast";
-import { Select } from "@/shared/ui/select";
 import type { User } from "@/shared/types/domain";
 import { useUpdateProfile } from "@/features/update-profile/model/use-update-profile";
 import { useUploadAvatar } from "@/features/upload-avatar/model/use-upload-avatar";
@@ -246,18 +245,6 @@ export const SettingsForm = ({ user }: SettingsFormProps) => {
         {activeTab === "account" ? (
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">Account settings</h2>
-            <div className="rounded-md bg-surface-muted p-3 text-sm">
-              <p className="font-medium">Current role</p>
-              <div className="mt-2 max-w-40">
-                <Select value={user.role} disabled className="h-9 rounded-lg bg-surface py-1 text-sm">
-                  <option value="admin">admin</option>
-                  <option value="editor">editor</option>
-                  <option value="viewer">viewer</option>
-                  <option value="guest">guest</option>
-                </Select>
-              </div>
-              <p className="mt-2 text-xs text-muted">Member roles are managed inside each workspace by its owner.</p>
-            </div>
             <Input
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}

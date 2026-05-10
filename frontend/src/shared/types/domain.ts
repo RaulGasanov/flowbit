@@ -3,6 +3,7 @@ export type ID = string;
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 export type UserRole = "admin" | "editor" | "viewer" | "guest";
+export type WorkspaceMemberRole = "owner" | "editor" | "viewer";
 export type ProjectVisibility = "private" | "team" | "public";
 export type NotificationType = "new_comment" | "task_updated" | "deadline_approaching";
 export type ThemePreference = "light" | "dark";
@@ -39,6 +40,7 @@ export interface Project {
   color: string;
   visibility: ProjectVisibility;
   memberIds: ID[];
+  memberRoles: Record<ID, WorkspaceMemberRole>;
   ownerId?: ID;
   shareToken?: string;
   createdAt: string;
