@@ -71,6 +71,14 @@ export default function ProjectBoardPage() {
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const selectedComments = selectedTask ? commentsByTaskId[selectedTask.id] ?? [] : [];
 
+  const openCreateTask = () => {
+    if (!permissions.canCreateTask) {
+      showMessage("You only have view access in this workspace", "error");
+      return;
+    }
+    setCreateModalOpen(true);
+  };
+
   useEffect(() => {
     if (selectedTaskId) {
       void loadComments(selectedTaskId).catch(() => undefined);
@@ -130,15 +138,28 @@ export default function ProjectBoardPage() {
                 </div>
                 <p className="mt-1 text-sm text-foreground/70">{project.description}</p>
               </div>
-              {isWorkspaceOwner ? (
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="secondary"
-                  className="h-9 min-h-9 rounded-lg px-4 text-sm"
-                  onClick={() => setShareModalOpen(true)}
+                  className="h-11 min-h-11 rounded-xl px-4 text-sm"
+                  onClick={openCreateTask}
+                  title={permissions.canCreateTask ? "Create task in this workspace" : "View-only workspace"}
                 >
-                  Share
+                  <span className="mr-2 text-base leading-none text-accent">
+                    +
+                  </span>
+                  New task
                 </Button>
-              ) : null}
+                {isWorkspaceOwner ? (
+                  <Button
+                    variant="secondary"
+                    className="h-11 min-h-11 rounded-xl px-4 text-sm"
+                    onClick={() => setShareModalOpen(true)}
+                  >
+                    Share
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </Card>
 
