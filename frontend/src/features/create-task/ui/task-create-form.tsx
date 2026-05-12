@@ -43,20 +43,27 @@ export const TaskCreateForm = ({
   const [deadline, setDeadline] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
-  const [workspaceError, setWorkspaceError] = useState<string>();
+  const [submitted, setSubmitted] = useState(false);
+
+  const titleError = submitted && !title.trim() ? "Task title is required" : undefined;
+  const workspaceError = submitted && !projectId && !selectedProjectId ? "Choose a workspace" : undefined;
+  const errorClassName = "border-rose-400 bg-rose-50/50 focus-visible:ring-rose-500/30";
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim()) {
+    const form = event.currentTarget;
+    const hasValidationError = !title.trim() || !selectedProjectId;
+
+    setSubmitted(true);
+    if (hasValidationError) {
+      window.requestAnimationFrame(() => {
+        form.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
+      });
       return;
     }
-    if (!selectedProjectId) {
-      setWorkspaceError("Choose a workspace");
-      return;
-    }
+
     setIsSubmitting(true);
     setError(undefined);
-    setWorkspaceError(undefined);
     try {
       await onCreate({
         projectId: selectedProjectId,
@@ -73,6 +80,7 @@ export const TaskCreateForm = ({
       setPriority("medium");
       setAssigneeId("");
       setDeadline("");
+      setSubmitted(false);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Failed to create task");
     } finally {
@@ -83,13 +91,18 @@ export const TaskCreateForm = ({
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <label className="grid gap-1 text-sm font-medium text-muted">
-        Task title
+        <span>
+          Task title <span className="text-rose-500">*</span>
+        </span>
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Write a clear task title"
           disabled={disabled}
+          aria-invalid={Boolean(titleError)}
+          className={cn(titleError && errorClassName)}
         />
+        {titleError ? <span className="text-sm font-normal text-rose-500">{titleError}</span> : null}
       </label>
 
       <label className="grid gap-1 text-sm font-medium text-muted">
@@ -165,14 +178,15 @@ export const TaskCreateForm = ({
       {error ? <p className="text-sm text-rose-500">{error}</p> : null}
       {!projectId ? (
         <label className="grid gap-1 text-sm font-medium text-muted">
-          Workspace
+          <span>
+            Workspace <span className="text-rose-500">*</span>
+          </span>
           <Select
             value={selectedProjectId}
-            onChange={(event) => {
-              setSelectedProjectId(event.target.value);
-              setWorkspaceError(undefined);
-            }}
+            onChange={(event) => setSelectedProjectId(event.target.value)}
             disabled={disabled}
+            aria-invalid={Boolean(workspaceError)}
+            className={cn(workspaceError && errorClassName)}
           >
             <option value="">Choose workspace</option>
             {projects.map((project) => (
