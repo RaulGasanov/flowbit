@@ -95,12 +95,12 @@ export const TaskTable = ({
                 </span>
               </td>
               <td className="px-3 py-3">
-                <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium capitalize ring-1 ${priorityTone[task.priority]}`}>
+                <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium leading-none capitalize ${priorityTone[task.priority]}`}>
                   {task.priority}
                 </span>
               </td>
               <td className="px-3 py-3">
-                <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ring-1 ${progressTone[task.status]}`}>
+                <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium leading-none ${progressTone[task.status]}`}>
                   {progressLabel[task.status]}
                 </span>
               </td>
