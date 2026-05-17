@@ -19,6 +19,4 @@ COPY --from=builder /flowbit-api /usr/local/bin/flowbit-api
 ENV PORT=8080
 EXPOSE 8080
 
-USER app
-
 CMD ["flowbit-api"]
