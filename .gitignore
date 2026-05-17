@@ -1,6 +1,7 @@
 .next
 node_modules
 dist
-.idea
+.idea/
+.DS_Store
 *.log
 backend/data.json
