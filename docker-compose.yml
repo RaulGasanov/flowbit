@@ -1,52 +1,22 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: flowbit-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: flowbit
-      POSTGRES_USER: flowbit
-      POSTGRES_PASSWORD: flowbit
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flowbit -d flowbit"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: flowbit-backend
+    image: cr.yandex/crpt7qdlb21t83b91iso/flowbit-backend:latest
     container_name: flowbit-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://flowbit:flowbit@db:5432/flowbit?sslmode=disable
+      DATABASE_URL: postgres://flowbit:FlowbitStrongPass123!@rc1a-00pdn5dbui9mua0f.mdb.yandexcloud.net:6432/flowbit?sslmode=require
       PORT: 8080
     ports:
       - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: flowbit-frontend
+    image: cr.yandex/crpt7qdlb21t83b91iso/flowbit-frontend:latest
     container_name: flowbit-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8080/api
+      NEXT_PUBLIC_API_URL: http://ТВОЙ_PUBLIC_IP:8080/api
       PORT: 3000
     ports:
       - "3000:3000"
     depends_on:
       - backend
-
-volumes:
-  postgres_data:
