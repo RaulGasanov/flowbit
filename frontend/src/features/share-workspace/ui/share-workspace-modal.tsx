@@ -11,6 +11,43 @@ import type { Project, User, WorkspaceMemberRole } from "@/shared/types/domain";
 
 type EditableWorkspaceRole = Exclude<WorkspaceMemberRole, "owner">;
 
+const copyTextToClipboard = async (text: string) => {
+  if (typeof navigator !== "undefined" && window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall back to the legacy path below. Browsers can reject clipboard writes
+      // on insecure origins, missing permissions, or expired user activation.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.opacity = "0";
+
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
+
 interface ShareWorkspaceModalProps {
   open: boolean;
   project?: Project;
@@ -33,6 +70,7 @@ export const ShareWorkspaceModal = ({
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState<EditableWorkspaceRole>("viewer");
   const [loadingKey, setLoadingKey] = useState<string>();
+  const [guestLink, setGuestLink] = useState("");
 
   const workspaceMembers = project ? users.filter((user) => project.memberIds.includes(user.id)) : [];
 
@@ -101,8 +139,14 @@ export const ShareWorkspaceModal = ({
     try {
       const { token } = await projectApi.share(project.id);
       const link = `${window.location.origin}/guest/workspaces/${token}`;
-      await navigator.clipboard?.writeText(link);
-      onMessage("Guest link copied");
+      setGuestLink(link);
+
+      const copied = await copyTextToClipboard(link);
+      if (copied) {
+        onMessage("Guest link copied");
+      } else {
+        onMessage("Guest link created. Select and copy it manually.", "error");
+      }
     } catch (shareError) {
       onMessage(shareError instanceof Error ? shareError.message : "Unable to create share link", "error");
     } finally {
@@ -129,6 +173,15 @@ export const ShareWorkspaceModal = ({
                 {loadingKey === "guest" ? "Copying..." : "Copy guest link"}
               </Button>
             </div>
+            {guestLink ? (
+              <Input
+                className="mt-3 h-9 rounded-lg bg-surface text-sm"
+                readOnly
+                value={guestLink}
+                onFocus={(event) => event.currentTarget.select()}
+                aria-label="Guest link"
+              />
+            ) : null}
           </section>
 
           <section className="rounded-xl border border-border bg-panel p-3">
