@@ -6,6 +6,9 @@ import { AppProviders } from "@/app/providers/app-providers";
 export const metadata: Metadata = {
   title: "Flowbit",
   description: "Task management SaaS frontend",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
