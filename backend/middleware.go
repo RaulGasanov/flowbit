@@ -7,7 +7,7 @@ import (
 
 func cors(next http.Handler) http.Handler {
 	allowedOrigins := map[string]bool{
-    	"http://localhost:3000":      true,
+    	"http://localhost:3000":     true,
     	"http://158.160.217.146:3000": true,
     }
 
